@@ -1,0 +1,37 @@
+---
+title: "EDA"
+output: html_notebook
+---
+
+Run setup:
+
+```{r}
+source("setup/run_setup.R")
+```
+
+```{r}
+summary(mv_data)
+```
+
+Removing all rows, with negative exposure. Where contract is terminated before renewal date:
+```{r}
+mv_data %>% 
+  filter(Exposure < 0) %>% 
+  select(Date_last_renewal, Date_lapse)
+
+mv_data <- mv_data %>% 
+  filter(Exposure >= 0)
+```
+
+Type_risk has a lot to say about length and Type_fuel are NA, which makes sense:
+
+```{r}
+mv_data %>%
+  group_by(Type_risk) %>%
+  summarise(
+    n = n(),
+    NA_Length = sum(is.na(Length)),
+    NA_Type_fuel = sum(is.na(Type_fuel))
+  )
+```
+

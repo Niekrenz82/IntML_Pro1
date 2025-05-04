@@ -1,8 +1,3 @@
-# get dependencys
-
-source("dependent.R")
-
-
 mv_data <- read_delim(
   "data/Motor vehicle insurance data.csv",
   delim = ";",
@@ -64,4 +59,22 @@ mv_data <- read_delim(
     ),
     Length = as.numeric(Length),
     Weight = as.numeric(Weight)
-  )
+  ) %>%
+  mutate(
+    Age = year(as.period(
+      interval(start = Date_birth, end = Date_last_renewal)
+    )),
+    Age_driving_licence = year(as.period(
+      interval(start = Date_driving_licence, end = Date_last_renewal)
+    )),
+    Vehicle_age = as.numeric(format(Date_last_renewal, "%Y")) - as.numeric(Year_matriculation),
+    Exposure = as.numeric(
+      if_else(
+        is.na(Date_lapse) |
+          Date_next_renewal < Date_lapse,
+        Date_next_renewal,
+        Date_lapse
+      ) - Date_last_renewal
+    ) / 365,
+  ) %>%
+  select(-Date_birth, -Date_driving_licence, Year_matriculation)
