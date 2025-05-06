@@ -28,3 +28,7 @@ ggsave(file = ".../.../name.pdf", height = x, width = y)
   - Vel ikke N_claim_year, og Lapse_date osv.
 Hvordan skal vi fortolke N_claims_year, der er eksempler på group_by(ID) %>% sum(N_claims_year) er større end N_claims_history.
 - Giver Exposure mening, dækker kontrakten stadigt hvis Data_lapse < Date_next_renewal?
+
+
+
+test
