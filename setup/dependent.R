@@ -1,6 +1,8 @@
 library(mlr3)
 library(mlr3learners)
 #library(mlr3extralearners)
+#library(remotes)
+#remotes::install_github("mlr-org/mlr3extralearners")
 library(mlr3tuning)
 library(mlr3mbo)
 library(glmnet)
