@@ -78,3 +78,8 @@ mv_data <- read_delim(
     ) / 365,
   ) %>%
   select(-Date_birth, -Date_driving_licence, Year_matriculation)
+
+# Remove rows with negative exposure
+
+mv_data <- mv_data %>%
+  filter(Exposure >= 0)

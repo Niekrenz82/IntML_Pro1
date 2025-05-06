@@ -1,6 +1,6 @@
 ---
 title: "EDA"
-output: html_notebook
+output: html_document
 ---
 
 Run setup:
@@ -33,6 +33,7 @@ ID_claim_sus <- mv_data %>%
 ```{r}
 ID_claim_sus %>% filter(is_decreasing == FALSE)
 ```
+
 ```{r}
 mv_data %>% filter(ID == 16257) %>% select(N_claims_year, N_claims_history)
 ```
