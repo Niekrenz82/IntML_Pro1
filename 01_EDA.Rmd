@@ -13,15 +13,30 @@ source("setup/run_setup.R")
 summary(mv_data)
 ```
 
-Removing all rows, with negative exposure. Where contract is terminated before renewal date:
+What does it mean that "N_claims_year" does not sum to "N_claim_history":
+```{r}
+mv_data %>% filter(ID == 39)
+```
+WHat does it mean that a contract is terminated on the same day it is renewed, and that Cost_claims_year > 0
 ```{r}
 mv_data %>% 
-  filter(Exposure < 0) %>% 
-  select(Date_last_renewal, Date_lapse)
-
-mv_data <- mv_data %>% 
-  filter(Exposure >= 0)
+  filter(Date_last_renewal == Date_lapse) %>% 
+  filter(Cost_claims_year > 0) %>% 
+  select(ID, Date_last_renewal, Date_lapse, Cost_claims_year, N_claims_year)
 ```
+How is the Cost_claims_year calculated?
+```{r}
+mv_data %>% 
+  filter(ID == 263) %>% 
+  select(ID, Date_last_renewal, Date_lapse, Cost_claims_year, N_claims_year, N_claims_history)
+```
+It cannot be due to a lag of N_claims_history being updated, since:
+```{r}
+mv_data %>% 
+  filter(N_claims_history < N_claims_year)
+```
+
+
 
 Type_risk has a lot to say about length and Type_fuel are NA, which makes sense:
 
@@ -31,7 +46,73 @@ mv_data %>%
   summarise(
     n = n(),
     NA_Length = sum(is.na(Length)),
-    NA_Type_fuel = sum(is.na(Type_fuel))
+    NA_Type_fuel = sum(is.na(Type_fuel)),
+    NA_Distrubution_channel = sum(is.na(Distribution_channel)),
+    freq = mean(N_claims_year),
+    avg_claim = sum(Cost_claims_year) / sum(N_claims_year),
   )
+```
+```{r}
+mv_data %>% 
+  filter(Type_risk == "Agricultural vehicles" & Length > 0) %>% # (Type_risk == "Motorbikes")
+  select(ID, Type_risk, Length)
+```
+
+
+```{r}
+mv_data %>% 
+  group_by(Type_fuel, Type_risk) %>% 
+  summarise(n=n())
+```
+We see that mast Motorbikes are Petrol, and Agricultural vehicles are Diesel.
+```{r}
+mv_data <- mv_data %>% 
+  mutate(
+    Type_fuel = case_when(
+      Type_risk == "Agricultural vehicles" & is.na(Type_fuel) ~ "Diesel",
+      Type_risk == "Motorbikes" & is.na(Type_fuel) ~ "Petrol",
+      TRUE ~ Type_fuel
+    )
+  )
+```
+
+
+```{r}
+mv_data %>% 
+  group_by(Type_risk, Distribution_channel) %>% 
+  summarise(n=n())
+```
+
+
+Check if the exposure variable is valid?:
+```{r}
+mv_data %>% 
+  mutate(
+    Exposure_type = case_when(
+      Exposure < 0 ~ "negative",
+      Exposure == 0 ~ "zero",
+      Exposure == 1 ~ "one",
+      TRUE ~ "other"
+    )
+  ) %>% 
+  group_by(Exposure_type) %>%
+  summarise(
+    freq = mean(N_claims_year),
+    avg_claim = mean(Cost_claims_year),
+    n = n()
+  )
+```
+Removing all rows, with negative exposure. Where contract is terminated before renewal date:
+```{r}
+mv_data %>% 
+  filter(Exposure < 0) %>% 
+  select(Date_last_renewal, Date_lapse)
+
+mv_data <- mv_data %>%
+  filter(Exposure >= 0)
+```
+
+```{r}
+mv_data %>% filter(0 < Exposure & Exposure < 1) %>% select(Date_last_renewal, Date_lapse)
 ```
 
