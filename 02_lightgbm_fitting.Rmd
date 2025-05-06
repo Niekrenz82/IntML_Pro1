@@ -6,7 +6,7 @@ output: html_document
 
 
 ```{r}
-reference_date <- as.Date("2015-11-01")
+reference_date <- as.Date("2015-01-01")
 
 date_cols <- mv_data %>%
   select(where(is.Date)) %>%
@@ -17,9 +17,9 @@ normalize_date_to_days <- function(date_vector) {
 }
 
 mv_changed_data <- mv_data %>%
-  mutate(across(all_of(date_cols), normalize_date_to_days))
+  mutate(across(all_of(date_cols), normalize_date_to_days), 
+         ID = as.numeric(ID))
 
-#task_mv$col_info
 ```
 
 
@@ -30,10 +30,11 @@ task_mv = TaskRegr$new(id = "motor_vehicle_claims", backend = mv_changed_data, t
 learner_lgb = mlr3extralearners::lrn("regr.lightgbm")
 
 
-learner_lgb$param_set$set_values(
-  early_stopping_rounds = 10
-)
+#learner_lgb$param_set$set_values(
+#  early_stopping_rounds = 10
+#)
 
+#task_mv$col_info
 ```
 
 
@@ -70,9 +71,13 @@ at = auto_tuner(
 
 
 ```{r}
+split = partition(task_mv)
+
 message("Starting hyperparameter tuning...")
-at$train(task_mv)
+at$train(task_mv, row_ids = split$train)
 message("Tuning complete.")
+
+at$predict(task_mv, row_ids = split$test)$score()
 
 # 10. Inspect the Results
 print("Tuning Results:")
@@ -83,4 +88,10 @@ best_params = at$model$learner$param_set$values
 print("Best Hyperparameters found:")
 print(best_params)
 ```
+
+
+
+
+
+
 
