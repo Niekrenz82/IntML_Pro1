@@ -22,17 +22,27 @@ ID_claim_sus <- mv_data %>%
   group_by(ID) %>% 
   summarise(
     N_claims_year_sum = sum(N_claims_year),
-    N_claims_history = max(N_claims_history)
+    N_claims_history = max(N_claims_history),
+    is_decreasing = all(diff(N_claims_year) <= 0)
   ) %>% 
   filter(
     N_claims_year_sum > N_claims_history
   )
 ```
+
+```{r}
+ID_claim_sus %>% filter(is_decreasing == FALSE)
+```
+```{r}
+mv_data %>% filter(ID == 16257) %>% select(N_claims_year, N_claims_history)
+```
+
+
 All examples of sum(N_claims_year) > N_claims_history
 ```{r}
 mv_data %>% 
   filter(ID %in% ID_claim_sus[["ID"]]) %>% 
-  select(ID, N_claims_year, N_claims_history, Date_last_renewal, Date_lapse)
+  select(ID, N_claims_year, N_claims_history,Cost_claims_year, Date_last_renewal, Date_lapse)
 ```
 
 
