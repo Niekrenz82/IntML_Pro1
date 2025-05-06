@@ -2,7 +2,8 @@
 Cooked By öglu.
 
 
-test
+# Modellering
+Ved modellering er vi blevet enige om ikke at bruge Lapse, Date_lapse og N_claims_year
 
 # plots
 
@@ -29,6 +30,3 @@ ggsave(file = ".../.../name.pdf", height = x, width = y)
 Hvordan skal vi fortolke N_claims_year, der er eksempler på group_by(ID) %>% sum(N_claims_year) er større end N_claims_history.
 - Giver Exposure mening, dækker kontrakten stadigt hvis Data_lapse < Date_next_renewal?
 
-
-
-test
