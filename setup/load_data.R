@@ -1,4 +1,4 @@
-mv_data <- read_delim(
+mv_data_tmp <- read_delim(
   "data/Motor vehicle insurance data.csv",
   delim = ";",
   escape_double = FALSE,
@@ -76,10 +76,10 @@ mv_data <- read_delim(
         Date_lapse
       ) - Date_last_renewal
     ) / 365,
-  ) %>%
-  select(-Date_birth, -Date_driving_licence, Year_matriculation)
+  ) 
 
 # Remove rows with negative exposure
 
-mv_data <- mv_data %>%
-  filter(Exposure >= 0)
+mv_data <- mv_data_tmp %>%
+  filter(Exposure >= 0) %>%
+  select(-Date_birth, -Date_driving_licence, Year_matriculation)
