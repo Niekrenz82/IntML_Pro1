@@ -17,13 +17,49 @@ What does it mean that "N_claims_year" does not sum to "N_claim_history":
 ```{r}
 mv_data %>% filter(ID == 39)
 ```
-WHat does it mean that a contract is terminated on the same day it is renewed, and that Cost_claims_year > 0
+```{r}
+ID_claim_sus <- mv_data %>% 
+  group_by(ID) %>% 
+  summarise(
+    N_claims_year_sum = sum(N_claims_year),
+    N_claims_history = max(N_claims_history),
+    is_decreasing = all(diff(N_claims_year) <= 0)
+  ) %>% 
+  filter(
+    N_claims_year_sum > N_claims_history
+  )
+```
+
+```{r}
+ID_claim_sus %>% filter(is_decreasing == FALSE)
+```
+```{r}
+mv_data %>% filter(ID == 16257) %>% select(N_claims_year, N_claims_history)
+```
+
+
+All examples of sum(N_claims_year) > N_claims_history
+```{r}
+mv_data %>% 
+  filter(ID %in% ID_claim_sus[["ID"]]) %>% 
+  select(ID, N_claims_year, N_claims_history,Cost_claims_year, Date_last_renewal, Date_lapse)
+```
+
+
+What does it mean that a contract is terminated on the same day it is renewed, and that Cost_claims_year > 0
 ```{r}
 mv_data %>% 
   filter(Date_last_renewal == Date_lapse) %>% 
   filter(Cost_claims_year > 0) %>% 
   select(ID, Date_last_renewal, Date_lapse, Cost_claims_year, N_claims_year)
 ```
+```{r}
+mv_data %>% 
+  filter(Date_next_renewal == Date_lapse) %>% 
+  select(Date_next_renewal, Date_lapse, Cost_claims_year, N_claims_year)
+```
+
+
 How is the Cost_claims_year calculated?
 ```{r}
 mv_data %>% 
