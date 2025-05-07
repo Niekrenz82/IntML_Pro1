@@ -152,7 +152,8 @@ mv_data_imp <- mv_data %>%
     Type_fuel = case_when(
       Type_risk == "Agricultural vehicles" & is.na(Type_fuel) ~ "Diesel",
       Type_risk == "Motorbikes" & is.na(Type_fuel) ~ "Petrol",
-      TRUE ~ Type_fuel
+      TRUE ~ Type_fuel,
+      .ptype = Type_fuel
     )
   ) %>%
   select(-Length) %>%
