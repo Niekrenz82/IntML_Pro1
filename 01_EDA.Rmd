@@ -17,6 +17,7 @@ What does it mean that "N_claims_year" does not sum to "N_claim_history":
 ```{r}
 mv_data %>% filter(ID == 39)
 ```
+
 ```{r}
 ID_claim_sus <- mv_data %>% 
   group_by(ID) %>% 
@@ -37,7 +38,6 @@ ID_claim_sus %>% filter(is_decreasing == FALSE)
 ```{r}
 mv_data %>% filter(ID == 16257) %>% select(N_claims_year, N_claims_history)
 ```
-
 
 All examples of sum(N_claims_year) > N_claims_history
 ```{r}
@@ -101,18 +101,6 @@ mv_data %>%
   group_by(Type_fuel, Type_risk) %>% 
   summarise(n=n())
 ```
-We see that mast Motorbikes are Petrol, and Agricultural vehicles are Diesel.
-```{r}
-mv_data <- mv_data %>% 
-  mutate(
-    Type_fuel = case_when(
-      Type_risk == "Agricultural vehicles" & is.na(Type_fuel) ~ "Diesel",
-      Type_risk == "Motorbikes" & is.na(Type_fuel) ~ "Petrol",
-      TRUE ~ Type_fuel
-    )
-  )
-```
-
 
 ```{r}
 mv_data %>% 
@@ -123,7 +111,7 @@ mv_data %>%
 
 Check if the exposure variable is valid?:
 ```{r}
-mv_data %>% 
+mv_data_tmp %>% 
   mutate(
     Exposure_type = case_when(
       Exposure < 0 ~ "negative",
@@ -136,8 +124,10 @@ mv_data %>%
   summarise(
     freq = mean(N_claims_year),
     avg_claim = mean(Cost_claims_year),
-    n = n()
-  )
+    n = n(),
+    mean_exposure = mean(Exposure)
+  ) %>% 
+  arrange(freq)
 ```
 Removing all rows, with negative exposure. Where contract is terminated before renewal date:
 ```{r}
@@ -145,11 +135,26 @@ mv_data %>%
   filter(Exposure < 0) %>% 
   select(Date_last_renewal, Date_lapse)
 
-mv_data <- mv_data %>%
-  filter(Exposure >= 0)
+# mv_data <- mv_data %>%
+#   filter(Exposure >= 0)
 ```
 
 ```{r}
 mv_data %>% filter(0 < Exposure & Exposure < 1) %>% select(Date_last_renewal, Date_lapse)
 ```
-
+We now handle the three columns with mussing values
+  - We see that mast Motorbikes are Petrol, and Agricultural vehicles are Diesel. 
+  - Since problem with MB and AG, and correlated with weight for the others.
+  - We inpute missing in distrubution_channel with and "other category
+```{r}
+mv_data_imp <- mv_data %>%
+  mutate(
+    Type_fuel = case_when(
+      Type_risk == "Agricultural vehicles" & is.na(Type_fuel) ~ "Diesel",
+      Type_risk == "Motorbikes" & is.na(Type_fuel) ~ "Petrol",
+      TRUE ~ Type_fuel
+    )
+  ) %>%
+  select(-Length) %>%
+  mutate(Distribution_channel = fct_na_value_to_level(Distribution_channel, "other"))
+```
