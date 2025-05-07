@@ -82,4 +82,4 @@ mv_data_tmp <- read_delim(
 
 mv_data <- mv_data_tmp %>%
   filter(Exposure >= 0) %>%
-  select(-Date_birth, -Date_driving_licence, Year_matriculation)
+  select(-Date_birth, -Date_driving_licence, -Year_matriculation)

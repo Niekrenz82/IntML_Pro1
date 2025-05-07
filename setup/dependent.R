@@ -15,3 +15,6 @@ library(mlr3oml) # use this package instead of OpenML
 library(future)
 library(igraph)
 library(lubridate)
+library(xtable)
+library(knitr)
+library(mlr3viz)
