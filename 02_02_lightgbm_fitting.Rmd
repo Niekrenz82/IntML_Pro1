@@ -1,0 +1,110 @@
+---
+title: "02_lightgbm_fitting"
+output: html_document
+---
+
+
+```{r}
+reference_date <- as.Date("2015-01-01")
+
+normalize_date_to_days <- function(date_vector) {
+  as.numeric(date_vector - reference_date)
+}
+
+mv_changed_data <- mv_data %>%
+  select(-c(N_claims_year, Date_lapse, Lapse)) 
+
+date_cols <- mv_data %>%
+  select(where(is.Date)) %>%
+  colnames()
+
+mv_changed_data <- mv_data %>%
+  mutate(across(all_of(date_cols), normalize_date_to_days)) 
+
+```
+
+
+
+```{r Task and learner}
+task_mv = TaskRegr$new(id = "motor_vehicle_claims", backend = mv_changed_data, target = "Cost_claims_year")
+
+task_mv$set_col_roles("ID", "group")
+
+learner_lgb = mlr3extralearners::lrn("regr.lightgbm")
+
+
+#learner_lgb$param_set$set_values(
+#  early_stopping_rounds = 10
+#)
+
+#task_mv$col_info
+```
+
+
+
+
+```{r Set parameter space}
+search_space = ps(
+  # --- Parameters for External Tuning ---
+  learning_rate = p_dbl(lower = 0.005, upper = 0.1, log = TRUE), # Step size shrinkage
+  num_leaves = p_int(lower = 10, upper = 512),       # Max leaves in a tree
+  max_depth = p_int(lower = 3, upper = 15),          # Max tree depth
+  feature_fraction = p_dbl(lower = 0.6, upper = 1.0), # Fraction of features per tree (colsample_bytree)
+  bagging_fraction = p_dbl(lower = 0.6, upper = 1.0) # Fraction of data per tree (subsample)
+)
+```
+
+
+
+```{r}
+resampling_cv_tuning = rsmp("cv", folds = 3)
+measure_optimize = msr("regr.mse")
+tuner_random = tnr("random_search")
+terminator = trm("evals", n_evals = 100)
+
+at = auto_tuner(
+  learner = learner_lgb,
+  resampling = resampling_cv_tuning, # Inner resampling for tuning
+  measure = measure_optimize,       # Measure to optimize (RMSE on inner CV folds)
+  search_space = search_space,      # Parameter search space (incl. nrounds as regular param)
+  tuner = tuner_random,             # Tuning algorithm
+  terminator = terminator           # Stopping condition for the external tuning
+)
+```
+
+
+```{r}
+split = partition(task_mv)
+
+message("Starting hyperparameter tuning...")
+at$train(task_mv, row_ids = split$train)
+message("Tuning complete.")
+```
+
+
+```{r}
+at$predict(task_mv, row_ids = split$test)$score()
+
+# 10. Inspect the Results
+print("Tuning Results:")
+print(at$tuning_result)
+
+# Get the best hyperparameters found (these will include the best sampled nrounds)
+best_params = at$model$learner$param_set$values
+print("Best Hyperparameters found:")
+print(best_params)
+```
+
+
+
+```{r}
+saveRDS(at, 'lightgbm_rpart.rds')
+model <- readRDS('lightgbm_rpart.rds')
+
+
+model$importance()
+```
+
+
+
+
