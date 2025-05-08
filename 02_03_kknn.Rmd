@@ -1,0 +1,87 @@
+---
+title: "02_rf"
+author: "Kruog"
+date: "2025-05-07"
+output: html_document
+---
+
+```{r}
+knitr::knit(
+  text  = readLines("01_01_EDA.Rmd"),
+  quiet = TRUE,
+  envir = globalenv()
+)
+```
+
+Now we try to fit 4 different models on the data, first we setup the common task:
+```{r}
+task_imp <- as_task_regr(
+  mv_data_imp,
+  target = "Cost_claims_year",
+  id = "mv_data",
+)
+
+task_imp$select(c("Distribution_channel","Seniority","Policies_in_force","Max_policies","Max_products","Payment","N_claims_history","R_Claims_history","Type_risk","Area","Second_driver","Power","Cylinder_capacity","Value_vehicle","N_doors","Type_fuel","Weight","Age","Age_driving_licence","Vehicle_age","Exposure", "ID"))
+
+task_imp$set_col_roles("ID", "group")
+
+task_imp
+```
+Setting up pipeline:
+```{r}
+# Define your encoding pipe
+pipe_encode = po("encode",
+  method         = "treatment",
+  affect_columns = selector_type("factor")
+)
+
+# Helper to wrap any learner in your pipe
+make_graph_learner = function(learner) {
+  gl = pipe_encode %>>% learner
+  GraphLearner$new(gl)
+}
+```
+
+
+```{r}
+# Common tuning components
+resampling_inner   = rsmp("cv", folds = 3)
+measure_mse        = msr("regr.mse")
+tuner_rs           = tnr("random_search")
+terminator_evals50 = trm("evals", n_evals = 2)
+
+# 4) Auto‐tuners with the pipe in front
+
+base_knn = lrn("regr.kknn", id = "knn")
+gl_knn = make_graph_learner(base_knn)
+search_space_knn = ps(
+  knn.k = p_int(lower = 1, upper = 50)
+)
+
+at_knn = AutoTuner$new(
+  learner      = gl_knn,
+  resampling   = resampling_inner,
+  measure      = measure_mse,
+  tuner        = tuner_rs,
+  terminator   = terminator_evals50,
+  search_space = search_space_knn
+)
+
+gl_featless = make_graph_learner(lrn("regr.featureless"))
+```
+
+```{r}
+# 6) Outer resampling & task
+resampling_outer = rsmp("cv", folds = 3)
+# 7) Benchmark setup & run
+learners = list(at_knn, gl_featless)
+design   = benchmark_grid(
+  tasks      = task_imp,
+  learners   = learners,
+  resamplings = resampling_outer
+)
+bmr = benchmark(design)
+
+# 8) Aggregate MSE results
+bmr$aggregate(measure_mse)
+```
