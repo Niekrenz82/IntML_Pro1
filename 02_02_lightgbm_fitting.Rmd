@@ -19,6 +19,9 @@ date_cols <- mv_data %>%
   colnames()
 
 mv_changed_data <- mv_data %>%
+    mutate(across(all_of(date_cols), ~ year(.x), .names = "{.col}_year")) %>%
+    mutate(across(all_of(date_cols), ~ month(.x), .names = "{.col}_month")) %>%
+    mutate(across(all_of(date_cols), ~ day(.x), .names = "{.col}_day")) %>%
   mutate(across(all_of(date_cols), normalize_date_to_days)) 
 
 ```
@@ -85,7 +88,6 @@ message("Tuning complete.")
 ```{r}
 at$predict(task_mv, row_ids = split$test)$score()
 
-# 10. Inspect the Results
 print("Tuning Results:")
 print(at$tuning_result)
 
@@ -102,7 +104,8 @@ saveRDS(at, 'lightgbm_rpart.rds')
 model <- readRDS('lightgbm_rpart.rds')
 
 
-model$importance()
+model$predict(task_mv, row_ids = split$test)$score()
+
 ```
 
 
