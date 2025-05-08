@@ -5,59 +5,77 @@ date: "2025-05-07"
 ---
 
 
-```{r}
-reference_date <- as.Date("2015-01-01")
 
+```{r}
 normalize_date_to_days <- function(date_vector) {
-  as.numeric(date_vector - reference_date)
+  as.numeric(date_vector - as.Date("2015-01-01"))
 }
 
 mv_changed_data <- mv_data %>%
-  select(-c(N_claims_year, Date_lapse, Lapse)) 
+  select(-c(ID,N_claims_year, Date_lapse, Lapse)) 
 
-date_cols <- mv_data %>%
+date_cols <- mv_changed_data %>%
   select(where(is.Date)) %>%
   colnames()
 
-mv_changed_data <- mv_data %>%
+mv_changed_data <- mv_changed_data %>%
     mutate(across(all_of(date_cols), ~ year(.x), .names = "{.col}_year")) %>%
     mutate(across(all_of(date_cols), ~ month(.x), .names = "{.col}_month")) %>%
     mutate(across(all_of(date_cols), ~ day(.x), .names = "{.col}_day")) %>%
-  mutate(across(all_of(date_cols), normalize_date_to_days)) 
+  mutate(across(all_of(date_cols), normalize_date_to_days))
 
+```
+
+
+```{r}
+summary(mv_changed_data)
 ```
 
 
 
 ```{r Task and learner}
-task_mv = TaskRegr$new(id = "motor_vehicle_claims", backend = mv_data, target = "Cost_claims_year")
+task_mv = TaskRegr$new(id = "motor_vehicle_claims", backend = mv_changed_data, target = "Cost_claims_year")
 
-learner_xg = lts(lrn("regr.xgboost"))
 featureless = lrn("regr.featureless")
 ```
 
 
-```{r Set parameter space}
-learner_xg$param_set$search_space()
+```{r}
+graph_impact <- po("encodeimpact") %>>% lts(lrn("regr.xgboost"))
+graph_hot <- po("encode", method = "one-hot") %>>% lts(lrn("regr.xgboost"))
+
+# Two different learners
+hot_xg <- as_learner(graph_impact)
+encode_xg <- as_learner(graph_hot)
+
 ```
 
 
 ```{r}
-at_xgboost = auto_tuner(
-  tuner = tnr("random_search", batch_size = 100),
-  learner = learner_xg,
-  resampling = rsmp("cv", folds = 5),
+hot_xgboost = auto_tuner(
+  tuner = tnr("random_search", batch_size = 50),
+  learner = hot_xg,
+  resampling = rsmp("cv", folds = 3),
   measure = msr("regr.mse"),
   terminator = trm("evals", n_evals = 50)
 )
+
+encode_xgboost = auto_tuner(
+  tuner = tnr("random_search", batch_size = 50),
+  learner = encode_xg,
+  resampling = rsmp("cv", folds = 3),
+  measure = msr("regr.mse"),
+  terminator = trm("evals", n_evals = 50)
+)
+
 ```
 
 
 ```{r}
 design = benchmark_grid(
   tasks = task_mv,
-  learners = list(featureless, learner_xg),
-  resamplings = rsmp("cv", folds = 5)
+  learners = list(featureless, hot_xgboost, encode_xgboost),
+  resamplings = rsmp("cv", folds = 3)
 )
 
 bmr = benchmark(design)
