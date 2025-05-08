@@ -32,63 +32,37 @@ mv_changed_data <- mv_data %>%
 ```{r Task and learner}
 task_mv = TaskRegr$new(id = "motor_vehicle_claims", backend = mv_data, target = "Cost_claims_year")
 
-
-learner_xg = mlr3extralearners::lrn("regr.lightgbm")
-
+learner_xg = lts(lrn("regr.xgboost"))
+featureless = lrn("regr.featureless")
 ```
-
-
 
 
 ```{r Set parameter space}
-search_space = ps(
-  # --- Parameters for External Tuning ---
-  learning_rate = p_dbl(lower = 0.005, upper = 0.1, log = TRUE), # Step size shrinkage
-  num_leaves = p_int(lower = 10, upper = 512),       # Max leaves in a tree
-  max_depth = p_int(lower = 3, upper = 15),          # Max tree depth
-  feature_fraction = p_dbl(lower = 0.6, upper = 1.0), # Fraction of features per tree (colsample_bytree)
-  bagging_fraction = p_dbl(lower = 0.6, upper = 1.0) # Fraction of data per tree (subsample)
-)
+learner_xg$param_set$search_space()
 ```
 
 
-
 ```{r}
-resampling_cv_tuning = rsmp("cv", folds = 3)
-measure_optimize = msr("regr.mse")
-tuner_random = tnr("random_search")
-terminator = trm("evals", n_evals = 100)
-
-at = auto_tuner(
-  learner = learner_lgb,
-  resampling = resampling_cv_tuning, # Inner resampling for tuning
-  measure = measure_optimize,       # Measure to optimize (RMSE on inner CV folds)
-  search_space = search_space,      # Parameter search space (incl. nrounds as regular param)
-  tuner = tuner_random,             # Tuning algorithm
-  terminator = terminator           # Stopping condition for the external tuning
+at_xgboost = auto_tuner(
+  tuner = tnr("random_search", batch_size = 100),
+  learner = learner_xg,
+  resampling = rsmp("cv", folds = 5),
+  measure = msr("regr.mse"),
+  terminator = trm("evals", n_evals = 50)
 )
 ```
 
 
 ```{r}
-split = partition(task_mv)
+design = benchmark_grid(
+  tasks = task_mv,
+  learners = list(featureless, learner_xg),
+  resamplings = rsmp("cv", folds = 5)
+)
 
-message("Starting hyperparameter tuning...")
-at$train(task_mv, row_ids = split$train)
-message("Tuning complete.")
-```
+bmr = benchmark(design)
 
-
-```{r}
-at$predict(task_mv, row_ids = split$test)$score()
-
-print("Tuning Results:")
-print(at$tuning_result)
-
-# Get the best hyperparameters found (these will include the best sampled nrounds)
-best_params = at$model$learner$param_set$values
-print("Best Hyperparameters found:")
-print(best_params)
+bmr$aggregate(msr("classif.mse"))
 ```
 
 
