@@ -31,8 +31,6 @@ mv_changed_data <- mv_data %>%
 ```{r Task and learner}
 task_mv = TaskRegr$new(id = "motor_vehicle_claims", backend = mv_changed_data, target = "Cost_claims_year")
 
-task_mv$set_col_roles("ID", "group")
-
 learner_lgb = mlr3extralearners::lrn("regr.lightgbm")
 
 
