@@ -53,22 +53,55 @@ encode_xg <- as_learner(graph_hot)
 
 ```{r}
 hot_xgboost = auto_tuner(
-  tuner = tnr("random_search", batch_size = 50),
+  tuner = tnr("random_search"),
   learner = hot_xg,
   resampling = rsmp("cv", folds = 3),
   measure = msr("regr.mse"),
-  terminator = trm("evals", n_evals = 50)
+  terminator = trm("evals", n_evals = 100)
 )
 
 encode_xgboost = auto_tuner(
-  tuner = tnr("random_search", batch_size = 50),
+  tuner = tnr("random_search"),
   learner = encode_xg,
   resampling = rsmp("cv", folds = 3),
   measure = msr("regr.mse"),
-  terminator = trm("evals", n_evals = 50)
+  terminator = trm("evals", n_evals = 100)
 )
 
 ```
+
+
+
+```{r}
+split_test = partition(task_mv)
+
+encode_xgboost$train(task_mv, row_ids = split_test$train)
+```
+
+
+```{r}
+encode_xgboost$predict(task_mv, row_ids = split_test$test)$score(msr("regr.mse"))
+
+
+featureless$train(task_mv, row_ids = split_test$train)
+featureless$predict(task_mv, row_ids = split_test$test)$score(msr("regr.mse"))
+
+as.data.table(encode_xgboost$predict(task_mv, row_ids = split_test$test)) %>%
+  mutate(
+    mse = (truth - response)^2,
+    mse_min = (truth - pmax(0, response))^2
+  ) %>% 
+  summarise(
+    mse = mean(mse),
+    mse_min = mean(mse_min)
+  )
+
+```
+
+```{r}
+saveRDS(encode_xgboost, 'encode_xgboost.rds')
+```
+
 
 
 ```{r}
