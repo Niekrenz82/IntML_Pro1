@@ -12,13 +12,13 @@ normalize_date_to_days <- function(date_vector) {
 }
 
 mv_changed_data <- mv_data %>%
-  select(-c(N_claims_year, Date_lapse, Lapse)) 
+  select(-c(N_claims_year, Date_lapse, Lapse, ID)) 
 
-date_cols <- mv_data %>%
+date_cols <- mv_changed_data %>%
   select(where(is.Date)) %>%
   colnames()
 
-mv_changed_data <- mv_data %>%
+mv_changed_data <- mv_changed_data %>%
     mutate(across(all_of(date_cols), ~ year(.x), .names = "{.col}_year")) %>%
     mutate(across(all_of(date_cols), ~ month(.x), .names = "{.col}_month")) %>%
     mutate(across(all_of(date_cols), ~ day(.x), .names = "{.col}_day")) %>%
@@ -32,14 +32,104 @@ mv_changed_data <- mv_data %>%
 task_mv = TaskRegr$new(id = "motor_vehicle_claims", backend = mv_changed_data, target = "Cost_claims_year")
 
 learner_lgb = mlr3extralearners::lrn("regr.lightgbm")
+learner_featureless = lrn("regr.featureless")
 
+learner_lgb$param_set$set_values(
+  learning_rate = 0.05,
+  num_leaves = 256,
+  max_depth = 10,
+  feature_fraction = 0.8,
+  bagging_fraction = 0.8,
+  num_iterations = 1000
+)
 
-#learner_lgb$param_set$set_values(
-#  early_stopping_rounds = 10
-#)
-
-#task_mv$col_info
 ```
+
+
+```{r}
+pipe_encode = po("encode",
+  method         = "treatment",
+  affect_columns = selector_type("factor")
+)
+
+
+learner_lasso = as_learner(pipe_encode %>>% lrn("regr.glmnet", id = "lasso", alpha = 1))
+learner_ridge = as_learner(pipe_encode %>>% lrn("regr.glmnet", id = "ridge", alpha = 0)) 
+
+# Add XGBoost model
+learner_xgb = as_learner(pipe_encode %>>% lrn("regr.xgboost", id = "xgb"))
+
+# Add the three new LightGBM models with different objectives
+# 1. Poisson regression LightGBM
+learner_lgb_poisson = mlr3extralearners::lrn("regr.lightgbm", id = "lgb_poisson")
+learner_lgb_poisson$param_set$set_values(
+  learning_rate = 0.05,
+  num_leaves = 256,
+  max_depth = 10,
+  feature_fraction = 0.8,
+  bagging_fraction = 0.8,
+  num_iterations = 1000,
+  objective = "poisson"
+)
+
+# 2. Tweedie regression LightGBM
+learner_lgb_tweedie = mlr3extralearners::lrn("regr.lightgbm", id = "lgb_tweedie")
+learner_lgb_tweedie$param_set$set_values(
+  learning_rate = 0.05,
+  num_leaves = 256,
+  max_depth = 10,
+  feature_fraction = 0.8,
+  bagging_fraction = 0.8,
+  num_iterations = 1000,
+  objective = "tweedie",
+  tweedie_variance_power = 1.5  # Commonly used value between 1 and 2
+)
+
+# 3. Gamma regression LightGBM
+learner_lgb_gamma = mlr3extralearners::lrn("regr.lightgbm", id = "lgb_gamma")
+learner_lgb_gamma$param_set$set_values(
+  learning_rate = 0.05,
+  num_leaves = 256,
+  max_depth = 10,
+  feature_fraction = 0.8,
+  bagging_fraction = 0.8,
+  num_iterations = 1000,
+  objective = "gamma"
+)
+```
+
+
+```{r}
+learners = list(
+  learner_lgb,
+  learner_featureless, 
+  learner_lasso, 
+  learner_ridge, 
+  learner_xgb,
+  learner_lgb_poisson,
+  learner_lgb_tweedie,
+  learner_lgb_gamma
+)
+learner_xgb$train(task_mv)
+```
+
+
+
+
+```{r}
+cv10 = rsmp("cv", folds = 10)
+
+design = benchmark_grid(
+  tasks = task_mv,
+  learners = learners,
+  resamplings = cv10
+)
+
+# Run the benchmark
+bmr = benchmark(design)
+```
+
+
 
 
 
@@ -101,7 +191,7 @@ print(best_params)
 saveRDS(at, 'lightgbm_rpart.rds')
 model <- readRDS('lightgbm_rpart.rds')
 
-
+model$model$tuning_instance
 model$predict(task_mv, row_ids = split$test)$score()
 
 ```
