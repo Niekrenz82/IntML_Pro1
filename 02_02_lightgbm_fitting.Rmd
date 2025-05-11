@@ -4,21 +4,25 @@ output: html_document
 ---
 
 
-
 ```{r}
 reference_date <- as.Date("2015-01-01")
-
-date_cols <- mv_data %>%
-  select(where(is.Date)) %>%
-  colnames()
 
 normalize_date_to_days <- function(date_vector) {
   as.numeric(date_vector - reference_date)
 }
 
 mv_changed_data <- mv_data %>%
-  mutate(across(all_of(date_cols), normalize_date_to_days), 
-         ID = as.numeric(ID))
+  select(-c(N_claims_year, Date_lapse, Lapse)) 
+
+date_cols <- mv_data %>%
+  select(where(is.Date)) %>%
+  colnames()
+
+mv_changed_data <- mv_data %>%
+    mutate(across(all_of(date_cols), ~ year(.x), .names = "{.col}_year")) %>%
+    mutate(across(all_of(date_cols), ~ month(.x), .names = "{.col}_month")) %>%
+    mutate(across(all_of(date_cols), ~ day(.x), .names = "{.col}_day")) %>%
+  mutate(across(all_of(date_cols), normalize_date_to_days)) 
 
 ```
 
@@ -54,8 +58,8 @@ search_space = ps(
 
 
 ```{r}
-resampling_cv_tuning = rsmp("cv", folds = 5)
-measure_optimize = msr("regr.rmse")
+resampling_cv_tuning = rsmp("cv", folds = 3)
+measure_optimize = msr("regr.mse")
 tuner_random = tnr("random_search")
 terminator = trm("evals", n_evals = 100)
 
@@ -76,10 +80,12 @@ split = partition(task_mv)
 message("Starting hyperparameter tuning...")
 at$train(task_mv, row_ids = split$train)
 message("Tuning complete.")
+```
 
+
+```{r}
 at$predict(task_mv, row_ids = split$test)$score()
 
-# 10. Inspect the Results
 print("Tuning Results:")
 print(at$tuning_result)
 
@@ -91,6 +97,14 @@ print(best_params)
 
 
 
+```{r}
+saveRDS(at, 'lightgbm_rpart.rds')
+model <- readRDS('lightgbm_rpart.rds')
+
+
+model$predict(task_mv, row_ids = split$test)$score()
+
+```
 
 
 

@@ -1,0 +1,132 @@
+---
+title: "02_xgboost_fitting"
+output: html_document
+date: "2025-05-07"
+---
+
+
+
+```{r}
+normalize_date_to_days <- function(date_vector) {
+  as.numeric(date_vector - as.Date("2015-01-01"))
+}
+
+mv_changed_data <- mv_data %>%
+  select(-c(ID,N_claims_year, Date_lapse, Lapse)) 
+
+date_cols <- mv_changed_data %>%
+  select(where(is.Date)) %>%
+  colnames()
+
+mv_changed_data <- mv_changed_data %>%
+    mutate(across(all_of(date_cols), ~ year(.x), .names = "{.col}_year")) %>%
+    mutate(across(all_of(date_cols), ~ month(.x), .names = "{.col}_month")) %>%
+    mutate(across(all_of(date_cols), ~ day(.x), .names = "{.col}_day")) %>%
+  mutate(across(all_of(date_cols), normalize_date_to_days))
+
+```
+
+
+```{r}
+summary(mv_changed_data)
+```
+
+
+
+```{r Task and learner}
+task_mv = TaskRegr$new(id = "motor_vehicle_claims", backend = mv_changed_data, target = "Cost_claims_year")
+
+featureless = lrn("regr.featureless")
+```
+
+
+```{r}
+graph_impact <- po("encodeimpact") %>>% lts(lrn("regr.xgboost"))
+graph_hot <- po("encode", method = "one-hot") %>>% lts(lrn("regr.xgboost"))
+
+# Two different learners
+hot_xg <- as_learner(graph_impact)
+encode_xg <- as_learner(graph_hot)
+
+```
+
+
+```{r}
+hot_xgboost = auto_tuner(
+  tuner = tnr("random_search"),
+  learner = hot_xg,
+  resampling = rsmp("cv", folds = 3),
+  measure = msr("regr.mse"),
+  terminator = trm("evals", n_evals = 100)
+)
+
+encode_xgboost = auto_tuner(
+  tuner = tnr("random_search"),
+  learner = encode_xg,
+  resampling = rsmp("cv", folds = 3),
+  measure = msr("regr.mse"),
+  terminator = trm("evals", n_evals = 100)
+)
+
+```
+
+
+
+```{r}
+split_test = partition(task_mv)
+
+encode_xgboost$train(task_mv, row_ids = split_test$train)
+```
+
+
+```{r}
+encode_xgboost$predict(task_mv, row_ids = split_test$test)$score(msr("regr.mse"))
+
+
+featureless$train(task_mv, row_ids = split_test$train)
+featureless$predict(task_mv, row_ids = split_test$test)$score(msr("regr.mse"))
+
+as.data.table(encode_xgboost$predict(task_mv, row_ids = split_test$test)) %>%
+  mutate(
+    mse = (truth - response)^2,
+    mse_min = (truth - pmax(0, response))^2
+  ) %>% 
+  summarise(
+    mse = mean(mse),
+    mse_min = mean(mse_min)
+  )
+
+```
+
+```{r}
+saveRDS(encode_xgboost, 'encode_xgboost.rds')
+```
+
+
+
+```{r}
+design = benchmark_grid(
+  tasks = task_mv,
+  learners = list(featureless, hot_xgboost, encode_xgboost),
+  resamplings = rsmp("cv", folds = 3)
+)
+
+bmr = benchmark(design)
+
+bmr$aggregate(msr("classif.mse"))
+```
+
+
+
+```{r}
+saveRDS(at, 'lightgbm_rpart.rds')
+model <- readRDS('lightgbm_rpart.rds')
+
+
+model$predict(task_mv, row_ids = split$test)$score()
+
+```
+
+
+
+
