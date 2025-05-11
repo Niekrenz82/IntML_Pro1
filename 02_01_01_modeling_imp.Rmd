@@ -48,32 +48,30 @@ make_graph_learner = function(learner) {
 resampling_inner   = rsmp("cv", folds = 3)
 measure_mse        = msr("regr.mse")
 tuner_rs           = tnr("random_search")
-terminator_evals50 = trm("evals", n_evals = 30)
+terminator_evals50 = trm("evals", n_evals = 20)
 
 # 4) Auto‐tuners with the pipe in front
 
-# 4a) Ranger
-base_ranger = lrn("regr.ranger")
+# 4a) Ranger, include tuning space in the learner using lts
+base_ranger = lts(lrn("regr.ranger"))
 gl_ranger   = make_graph_learner(base_ranger)
 at_ranger   = AutoTuner$new(
   learner      = gl_ranger,
   resampling   = resampling_inner,
   measure      = measure_mse,
   tuner        = tuner_rs,
-  terminator   = terminator_evals50,
-  search_space = lts(base_ranger)      # pulls the ranger‐space, namespaced
+  terminator   = terminator_evals50
 )
 
-# 4b) XGBoost
-base_xgb = lrn("regr.xgboost")
+# 4b) XGBoost, include tuning space in the learner using lts
+base_xgb = lts(lrn("regr.xgboost"))
 gl_xgb   = make_graph_learner(base_xgb)
 at_xgb   = AutoTuner$new(
   learner      = gl_xgb,
   resampling   = resampling_inner,
   measure      = measure_mse,
   tuner        = tuner_rs,
-  terminator   = terminator_evals50,
-  search_space = lts(base_xgb)         # pulls the xgboost‐space, namespaced
+  terminator   = terminator_evals50        # pulls the xgboost‐space, namespaced
 )
 
 # 5) Other “plain” learners also piped
@@ -96,17 +94,21 @@ gl_featless = make_graph_learner(lrn("regr.featureless"))
 # 6) Outer resampling & task
 resampling_outer = rsmp("cv", folds = 3)
 # 7) Benchmark setup & run
-learners = list(at_ranger, at_xgb, gl_lasso, gl_ridge, gl_featless)
+learners = list(gl_lasso, at_xgb, at_ranger, gl_featless, gl_ridge)
 design   = benchmark_grid(
   tasks      = task_imp,
   learners   = learners,
   resamplings = resampling_outer
 )
-bmr = benchmark(design)
+bmr = benchmark(design, store_models = TRUE)
 
 # 8) Aggregate MSE results
-bmr$aggregate(measure_mse)
+#bmr$aggregate(measure_mse)
 ```
+```{r}
+bmr$learners$learner[[2]]$param_set$values
+```
+
 
 
 
