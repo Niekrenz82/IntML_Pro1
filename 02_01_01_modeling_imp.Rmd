@@ -45,10 +45,11 @@ make_graph_learner = function(learner) {
 
 ```{r}
 # Common tuning components
-resampling_inner   = rsmp("cv", folds = 3)
+resampling_inner   = rsmp("cv", folds = 2)
 measure_mse        = msr("regr.mse")
 tuner_rs           = tnr("random_search")
-terminator_evals50 = trm("evals", n_evals = 20)
+terminator_evals = trm("evals", n_evals = 25)
+terminator_evals_small = trm("evals", n_evals = 5)
 
 # 4) Auto‐tuners with the pipe in front
 
@@ -60,7 +61,7 @@ at_ranger   = AutoTuner$new(
   resampling   = resampling_inner,
   measure      = measure_mse,
   tuner        = tuner_rs,
-  terminator   = terminator_evals50
+  terminator   = terminator_evals_small
 )
 
 # 4b) XGBoost, include tuning space in the learner using lts
@@ -71,7 +72,23 @@ at_xgb   = AutoTuner$new(
   resampling   = resampling_inner,
   measure      = measure_mse,
   tuner        = tuner_rs,
-  terminator   = terminator_evals50        # pulls the xgboost‐space, namespaced
+  terminator   = terminator_evals_small       # pulls the xgboost‐space, namespaced
+)
+
+# 4c) lightgbm, include tuning space in the learner using lts
+base_lgbm = mlr3extralearners::lrn("regr.lightgbm",
+  learning_rate = to_tune(0.005, 0.1, logscale = TRUE),
+  num_leaves = to_tune(10, 512),
+  max_depth = to_tune(3, 15),
+  feature_fraction = to_tune(0.6, 1.0),
+  bagging_fraction = to_tune(0.6, 1.0))
+gl_lgbm   = make_graph_learner(base_lgbm)
+at_lgbm   = AutoTuner$new(
+  learner      = gl_lgbm,
+  resampling   = resampling_inner,
+  measure      = measure_mse,
+  tuner        = tuner_rs,
+  terminator   = terminator_evals        # pulls the xgboost‐space, namespaced
 )
 
 # 5) Other “plain” learners also piped
@@ -91,23 +108,50 @@ gl_featless = make_graph_learner(lrn("regr.featureless"))
 ```
 
 ```{r}
+split = partition(task_imp, ratio = 0.8)
+```
+
+
+
+```{r}
+split = partition(task_imp, ratio = 0.8)
+```
+
+```{r}
+at_lgbm$train(task = task_imp, row_ids = split$train)
+```
+```{r}
+at_lgbm$model$learner$param_set$values
+```
+
+```{r}
 # 6) Outer resampling & task
-resampling_outer = rsmp("cv", folds = 3)
+resampling_outer = rsmp("cv", folds = 2)
 # 7) Benchmark setup & run
-learners = list(gl_lasso, at_xgb, at_ranger, gl_featless, gl_ridge)
+learners = list(at_lgbm, gl_lasso, at_xgb, at_ranger, gl_featless, gl_ridge) # gl_lasso, at_xgb, at_ranger, gl_featless, gl_ridge, at_lgbm
 design   = benchmark_grid(
   tasks      = task_imp,
   learners   = learners,
   resamplings = resampling_outer
 )
-bmr = benchmark(design, store_models = TRUE)
-
-# 8) Aggregate MSE results
-#bmr$aggregate(measure_mse)
+bmr = benchmark(design) # , store_models = TRUE
+saveRDS(bmr, file = "output/bmr01.rds")
 ```
 ```{r}
-bmr$learners$learner[[2]]$param_set$values
+saveRDS(bmr, file = "output/bmr01.rds")
 ```
+
+
+```{r}
+# 8) Aggregate MSE results
+bmr$aggregate(measure_mse)
+```
+
+```{r}
+extract_inner_tuning_results(bmr)
+```
+
+
 
 
 
