@@ -40,3 +40,15 @@ df_agg <- mv_data_imp %>%
 
 ```
 
+```{r}
+df_agg <- df_agg %>%
+  mutate(PCC = as.factor(ifelse(Total_claims > 0, "1", "0")))
+```
+
+
+
+```{r}
+df_agg_P <- df_agg %>%
+  filter(PCC == "1")
+```
+
