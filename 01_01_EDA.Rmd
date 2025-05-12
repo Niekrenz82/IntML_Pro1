@@ -156,6 +156,8 @@ mv_data_imp <- mv_data %>%
       .ptype = Type_fuel
     )
   ) %>%
-  select(-Length) %>%
+  select(-Length, -Date_next_renewal, -Lapse, -Date_lapse) %>%
   mutate(Distribution_channel = fct_na_value_to_level(Distribution_channel, "other"))
 ```
+
+

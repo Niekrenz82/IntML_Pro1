@@ -1,0 +1,42 @@
+---
+title: "AggregeretData"
+output: html_document
+---
+
+```{r}
+df_agg <- mv_data_imp %>%
+  group_by(ID) %>%
+  summarise(
+    # Sidste værdi i historikken (baseret på rækkefølge i datasættet)
+    Date_start_contract  = first(Date_start_contract),
+    Date_last_renewal = last(Date_last_renewal),
+    Distribution_channel = last(Distribution_channel),
+    Seniority = last(Seniority),
+    Policies_in_force = last(Policies_in_force),
+    Max_policies = last(Max_policies),
+    Max_products = last(Max_products),
+    Payment = last(Payment),
+    N_claims_year = last(N_claims_year),
+    N_claims_history = last(N_claims_history),
+    R_Claims_history = last(R_Claims_history),
+    Type_risk = last(Type_risk),
+    Area = last(Area),
+    Second_driver = last(Second_driver),
+    Power = last(Power),
+    Cylinder_capacity = last(Cylinder_capacity),
+    Value_vehicle = last(Value_vehicle),
+    N_doors = last(N_doors),
+    Type_fuel = last(Type_fuel),
+    Weight = last(Weight),
+    Age = last(Age),
+    Age_driving_licence = last(Age_driving_licence),
+    Vehicle_age = last(Vehicle_age),
+    # Summerede værdier
+    Total_premium = sum(Premium, na.rm = TRUE),
+    Total_claims = sum(Cost_claims_year, na.rm = TRUE),
+    Total_exposure = sum(Exposure, na.rm = TRUE),
+    
+  )
+
+```
+
