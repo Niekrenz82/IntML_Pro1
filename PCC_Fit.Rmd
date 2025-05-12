@@ -1,0 +1,67 @@
+---
+title: "02_04_classifmodel"
+output: html_document
+date: "2025-05-12"
+---
+
+```{r}
+df_agg <- df_agg %>%
+  mutate(PCC = as.factor(ifelse(Total_claims > 0, "1", "0")))
+```
+
+```{r}
+df_agg_u_dates <- df_agg %>%
+  select(-c(Date_start_contract,Date_last_renewal))
+```
+
+
+```{r}
+normalize_date_to_days <- function(date_vector) {
+  as.numeric(date_vector - as.Date("2015-01-01"))
+}
+
+mv_changed_data <- df_agg %>%
+  select(-c(ID,N_claims_year)) 
+
+date_cols <- mv_changed_data %>%
+  select(where(is.Date)) %>%
+  colnames()
+
+mv_changed_data <- mv_changed_data %>%
+    mutate(across(all_of(date_cols), ~ year(.x), .names = "{.col}_year")) %>%
+    mutate(across(all_of(date_cols), ~ month(.x), .names = "{.col}_month")) %>%
+    mutate(across(all_of(date_cols), ~ day(.x), .names = "{.col}_day")) %>%
+  mutate(across(all_of(date_cols), normalize_date_to_days))
+```
+
+```{r}
+str(df_agg)
+```
+
+
+
+```{r}
+df_model <- mv_changed_data %>% select(-Total_claims, -N_claims_history, -R_Claims_history)
+
+# Opret task
+task = TaskClassif$new(id = "pcc_rf", backend = df_model, target = "PCC", positive = "1")
+
+# Vælg Random Forest learner
+learner = lrn("classif.ranger", predict_type = "prob")
+
+# Krydsvalidering (5-fold)
+resampling = rsmp("cv", folds = 5)
+
+# Træn og evaluer modellen
+rr = resample(task, learner, resampling)
+
+# Print performance (f.eks. AUC)
+rr$aggregate(msr("classif.auc"))
+```
+
+
+```{r}
+learner$train(task)
+pred = learner$predict(task)
+```
+
