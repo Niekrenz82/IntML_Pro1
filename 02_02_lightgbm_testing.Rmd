@@ -1,0 +1,157 @@
+---
+title: "02_xgboost_fitting"
+output: html_document
+date: "2025-05-07"
+---
+
+
+
+```{r}
+reference_date <- as.Date("2015-01-01")
+
+normalize_date_to_days <- function(date_vector) {
+  as.numeric(date_vector - reference_date)
+}
+
+mv_changed_data <- mv_data %>%
+  select(-c(N_claims_year,Date_next_renewal, Date_lapse, Lapse, ID)) 
+
+date_cols <- mv_changed_data %>%
+  select(where(is.Date)) %>%
+  colnames()
+
+mv_changed_data <- mv_changed_data %>%
+    mutate(across(all_of(date_cols), ~ year(.x), .names = "{.col}_year")) %>%
+    mutate(across(all_of(date_cols), ~ month(.x), .names = "{.col}_month")) %>%
+    mutate(across(all_of(date_cols), ~ day(.x), .names = "{.col}_day")) %>%
+  mutate(across(all_of(date_cols), normalize_date_to_days)) 
+
+```
+
+
+
+```{r Task and learner}
+task_mv = TaskRegr$new(id = "motor_vehicle_claims", backend = mv_changed_data, target = "Cost_claims_year")
+
+learner_lgb = mlr3extralearners::lrn("regr.lightgbm")
+learner_featureless = lrn("regr.featureless")
+
+learner_lgb$param_set$set_values(
+  learning_rate = 0.01,
+  num_leaves = 300,
+  max_depth = 10,
+  feature_fraction = 0.8,
+  bagging_fraction = 0.8,
+  num_iterations = 1000
+)
+
+```
+
+
+```{r}
+pipe_encode = po("encode",
+  method         = "treatment",
+  affect_columns = selector_type("factor")
+)
+
+
+learner_lasso = as_learner(ppl("robustify") %>>% lrn("regr.glmnet", id = "lasso", alpha = 1))
+learner_ridge = as_learner(ppl("robustify") %>>% lrn("regr.glmnet", id = "ridge", alpha = 0)) 
+
+# Add XGBoost model
+learner_xgb = as_learner(pipe_encode %>>% lrn("regr.xgboost", id = "xgb"))
+
+# Add the three new LightGBM models with different objectives
+# 1. Poisson regression LightGBM
+learner_lgb_poisson = mlr3extralearners::lrn("regr.lightgbm", id = "lgb_poisson")
+learner_lgb_poisson$param_set$set_values(
+  learning_rate = 0.05,
+  num_leaves = 256,
+  max_depth = 10,
+  feature_fraction = 0.8,
+  bagging_fraction = 0.8,
+  num_iterations = 1000,
+  objective = "poisson"
+)
+
+# 2. Tweedie regression LightGBM
+learner_lgb_tweedie = mlr3extralearners::lrn("regr.lightgbm", id = "lgb_tweedie")
+learner_lgb_tweedie$param_set$set_values(
+  learning_rate = 0.05,
+  num_leaves = 256,
+  max_depth = 10,
+  feature_fraction = 0.8,
+  bagging_fraction = 0.8,
+  num_iterations = 1000,
+  objective = "tweedie",
+  tweedie_variance_power = 1.5  # Commonly used value between 1 and 2
+)
+
+# 3. Gamma regression LightGBM
+learner_lgb_gamma = mlr3extralearners::lrn("regr.lightgbm", id = "lgb_gamma")
+learner_lgb_gamma$param_set$set_values(
+  learning_rate = 0.05,
+  num_leaves = 256,
+  max_depth = 10,
+  feature_fraction = 0.8,
+  bagging_fraction = 0.8,
+  num_iterations = 1000,
+  objective = "gamma"
+)
+```
+
+
+```{r}
+learner_list = list(
+  learner_lgb,
+  learner_featureless, 
+  learner_lasso, 
+  learner_ridge, 
+  learner_xgb,
+  learner_lgb_poisson,
+  learner_lgb_tweedie,
+  learner_lgb_gamma
+)
+
+learner_feat_lgb = list(
+  learner_lgb,
+  learner_lgb_poisson,
+  learner_lgb_tweedie,
+  learner_featureless
+)
+
+```
+
+
+
+
+```{r}
+cv10 = rsmp("cv", folds = 5)
+
+design = benchmark_grid(
+  tasks = task_mv,
+  learners = learner_feat_lgb,
+  resamplings = cv10
+)
+
+# Run the benchmark
+bmr = benchmark(design)
+
+bmr$aggregate(msr("regr.mse"))
+```
+
+
+
+```{r}
+split = partition(task_mv)
+learner_lgb$train(task_mv, row_ids = split$train)
+learner_lgb_poisson$train(task_mv, row_ids = split$train)
+learner_lgb_tweedie$train(task_mv, row_ids = split$train)
+learner_featureless$train(task_mv, row_ids = split$train)
+
+learner_lgb$predict(task_mv, row_ids = split$test)$score()
+learner_lgb_poisson$predict(task_mv, row_ids = split$test)$score()
+learner_lgb_tweedie$predict(task_mv, row_ids = split$test)$score()
+learner_featureless$predict(task_mv, row_ids = split$test)$score()
+```
+
