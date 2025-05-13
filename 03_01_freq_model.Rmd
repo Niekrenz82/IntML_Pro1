@@ -1,5 +1,20 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output: html_document
 ---
+```{r}
+knitr::knit(
+  text  = readLines("AggregeretData.Rmd"),
+  quiet = TRUE,
+  envir = globalenv()
+)
+```
+
+
+```{r}
+df_agg_P
+```
+```{r}
+task_freq <- TaskRegr$new(id = "freq", backend = df_agg_P, target = "Freq") 
+```
 
