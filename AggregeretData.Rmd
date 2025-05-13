@@ -47,8 +47,17 @@ df_agg <- mv_data_imp %>%
 ```
 
 ```{r}
+df_agg <- df_agg %>%
+  mutate(
+    PCC = as.factor(ifelse(Total_claims > 0, "1", "0")),
+    Freq = Total_N_claims_year / Total_exposure,
+    Avg_claims = Total_claims / Total_N_claims_year
+    )
+```
+
+```{r}
 mv_changed_data <- df_agg %>%
-  select(-c(ID,Total_N_claims_year, Total_premium, Total_claims, R_claims_history))
+  select(-c(ID,Total_N_claims_year, Total_premium, Total_claims, R_Claims_history))
 
 date_cols <- mv_changed_data %>%
   select(where(is.Date)) %>%
@@ -57,17 +66,7 @@ date_cols <- mv_changed_data %>%
 mv_changed_data <- mv_changed_data %>%
     mutate(across(all_of(date_cols), ~ year(.x), .names = "{.col}_year")) %>%
     mutate(across(all_of(date_cols), ~ month(.x), .names = "{.col}_month")) %>%
-    mutate(across(all_of(date_cols), ~ day(.x), .names = "{.col}_day")) %>%
-  mutate(across(all_of(date_cols), normalize_date_to_days))
-```
-
-```{r}
-df_agg <- mv_changed_data %>%
-  mutate(
-    PCC = as.factor(ifelse(Total_claims > 0, "1", "0")),
-    Freq = Total_N_claims_year / Total_exposure,
-    Avg_claims = Total_claims / Total_N_claims_year
-    )
+    mutate(across(all_of(date_cols), ~ day(.x), .names = "{.col}_day"))
 ```
 
 ```{r}
