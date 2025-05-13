@@ -2,6 +2,13 @@
 title: "AggregeretData"
 output: html_document
 ---
+```{r}
+knitr::knit(
+  text  = readLines("01_01_EDA.Rmd"),
+  quiet = TRUE,
+  envir = globalenv()
+)
+```
 
 ```{r}
 df_agg <- mv_data_imp %>%
