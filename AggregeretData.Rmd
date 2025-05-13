@@ -67,6 +67,9 @@ mv_changed_data <- mv_changed_data %>%
     mutate(across(all_of(date_cols), ~ year(.x), .names = "{.col}_year")) %>%
     mutate(across(all_of(date_cols), ~ month(.x), .names = "{.col}_month")) %>%
     mutate(across(all_of(date_cols), ~ day(.x), .names = "{.col}_day"))
+
+df_agg <- mv_changed_data %>%
+  select(-c(Date_start_contract, Date_last_renewal, N_claims_history))
 ```
 
 ```{r}
