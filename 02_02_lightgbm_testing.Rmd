@@ -14,144 +14,129 @@ normalize_date_to_days <- function(date_vector) {
 }
 
 mv_changed_data <- mv_data %>%
-  select(-c(N_claims_year,Date_next_renewal, Date_lapse, Lapse, ID)) 
+  select(-c(N_claims_year, Date_next_renewal, Date_lapse, Lapse, ID))
 
 date_cols <- mv_changed_data %>%
   select(where(is.Date)) %>%
   colnames()
 
 mv_changed_data <- mv_changed_data %>%
-    mutate(across(all_of(date_cols), ~ year(.x), .names = "{.col}_year")) %>%
-    mutate(across(all_of(date_cols), ~ month(.x), .names = "{.col}_month")) %>%
-    mutate(across(all_of(date_cols), ~ day(.x), .names = "{.col}_day")) %>%
-  mutate(across(all_of(date_cols), normalize_date_to_days)) 
+  mutate(across(all_of(date_cols), ~ year(.x), .names = "{.col}_year")) %>%
+  mutate(across(all_of(date_cols), ~ month(.x), .names = "{.col}_month")) %>%
+  mutate(across(all_of(date_cols), ~ day(.x), .names = "{.col}_day")) %>%
+  mutate(across(all_of(date_cols), normalize_date_to_days))
 
 ```
 
 
 
-```{r Task and learner}
+```{r Task and learners}
 task_mv = TaskRegr$new(id = "motor_vehicle_claims", backend = mv_changed_data, target = "Cost_claims_year")
 
-learner_lgb = mlr3extralearners::lrn("regr.lightgbm")
+# --- 3. Learner Definitions ---
+
+# Featureless learner (baseline)
 learner_featureless = lrn("regr.featureless")
 
-learner_lgb$param_set$set_values(
-  learning_rate = 0.01,
-  num_leaves = 300,
-  max_depth = 10,
-  feature_fraction = 0.8,
-  bagging_fraction = 0.8,
-  num_iterations = 1000
+# Base LightGBM learners (objective and iterations are set, other params will be tuned)
+# Note: `num_iterations` is fixed here. If you want to tune it, add it to the `search_space`.
+# The default objective for regr.lightgbm is "regression_l2" (L2 loss)
+learner_lgb_base = lrn("regr.lightgbm", id = "lgb_l2", num_iterations = 500)
+
+learner_lgb_poisson_base = lrn("regr.lightgbm", id = "lgb_poisson", objective = "poisson", num_iterations = 500)
+learner_lgb_tweedie_base = lrn("regr.lightgbm", id = "lgb_tweedie", objective = "tweedie", num_iterations = 500)
+learner_lgb_gamma_base = lrn("regr.lightgbm", id = "lgb_gamma", objective = "gamma", num_iterations = 500)
+
+
+# --- 4. Hyperparameter Search Space for LightGBM ---
+search_space_lgb = ps(
+  learning_rate = p_dbl(lower = 0.005, upper = 0.1, log = TRUE),
+  num_leaves = p_int(lower = 10, upper = 300), # Adjusted upper limit from 512 for potentially faster tuning
+  max_depth = p_int(lower = 3, upper = 12),     # Adjusted upper limit from 15
+  feature_fraction = p_dbl(lower = 0.6, upper = 1.0),
+  bagging_fraction = p_dbl(lower = 0.6, upper = 1.0),
+  min_data_in_leaf = p_int(lower = 1, upper = 50) # Adjusted upper limit from 100
+  # lambda_l1 = p_dbl(lower = 1e-8, upper = 10.0, log = TRUE), # Example: L1 regularization
+  # lambda_l2 = p_dbl(lower = 1e-8, upper = 10.0, log = TRUE)  # Example: L2 regularization
+  # Consider adding regularization terms if overfitting is an issue.
 )
 
-```
+# --- 5. Nested Cross-Validation Setup ---
 
+# Inner resampling (for hyperparameter tuning)
+inner_resampling = rsmp("cv", folds = 3)
 
-```{r}
-pipe_encode = po("encode",
-  method         = "treatment",
-  affect_columns = selector_type("factor")
+# Terminator (for hyperparameter tuning)
+# Increase n_evals for more thorough tuning in a real scenario
+terminator = trm("evals", n_evals = 10) # Using 10 evals for speed; consider 20-50+
+
+# Tuner (Random Search)
+tuner = tnr("random_search")
+
+# AutoTuner for each LightGBM variant
+# Uses Mean Squared Error (regr.mse) for tuning by default for regression tasks
+
+at_lgb_l2 = AutoTuner$new(
+  learner = learner_lgb_base,
+  resampling = inner_resampling,
+  measure = msr("regr.mse"),
+  search_space = search_space_lgb,
+  terminator = terminator,
+  tuner = tuner
+)
+
+at_lgb_poisson = AutoTuner$new(
+  learner = learner_lgb_poisson_base,
+  resampling = inner_resampling,
+  measure = msr("regr.mse"),
+  search_space = search_space_lgb,
+  terminator = terminator,
+  tuner = tuner
+)
+
+at_lgb_tweedie = AutoTuner$new(
+  learner = learner_lgb_tweedie_base,
+  resampling = inner_resampling,
+  measure = msr("regr.mse"),
+  search_space = search_space_lgb,
+  terminator = terminator,
+  tuner = tuner
 )
 
 
-learner_lasso = as_learner(ppl("robustify") %>>% lrn("regr.glmnet", id = "lasso", alpha = 1))
-learner_ridge = as_learner(ppl("robustify") %>>% lrn("regr.glmnet", id = "ridge", alpha = 0)) 
-
-# Add XGBoost model
-learner_xgb = as_learner(pipe_encode %>>% lrn("regr.xgboost", id = "xgb"))
-
-# Add the three new LightGBM models with different objectives
-# 1. Poisson regression LightGBM
-learner_lgb_poisson = mlr3extralearners::lrn("regr.lightgbm", id = "lgb_poisson")
-learner_lgb_poisson$param_set$set_values(
-  learning_rate = 0.05,
-  num_leaves = 256,
-  max_depth = 10,
-  feature_fraction = 0.8,
-  bagging_fraction = 0.8,
-  num_iterations = 1000,
-  objective = "poisson"
+# List of learners for the outer loop benchmark
+learners_for_benchmark = list(
+  at_lgb_l2,
+  at_lgb_poisson,
+  at_lgb_tweedie,
+  learner_featureless # Baseline
 )
 
-# 2. Tweedie regression LightGBM
-learner_lgb_tweedie = mlr3extralearners::lrn("regr.lightgbm", id = "lgb_tweedie")
-learner_lgb_tweedie$param_set$set_values(
-  learning_rate = 0.05,
-  num_leaves = 256,
-  max_depth = 10,
-  feature_fraction = 0.8,
-  bagging_fraction = 0.8,
-  num_iterations = 1000,
-  objective = "tweedie",
-  tweedie_variance_power = 1.5  # Commonly used value between 1 and 2
-)
-
-# 3. Gamma regression LightGBM
-learner_lgb_gamma = mlr3extralearners::lrn("regr.lightgbm", id = "lgb_gamma")
-learner_lgb_gamma$param_set$set_values(
-  learning_rate = 0.05,
-  num_leaves = 256,
-  max_depth = 10,
-  feature_fraction = 0.8,
-  bagging_fraction = 0.8,
-  num_iterations = 1000,
-  objective = "gamma"
-)
-```
-
-
-```{r}
-learner_list = list(
-  learner_lgb,
-  learner_featureless, 
-  learner_lasso, 
-  learner_ridge, 
-  learner_xgb,
-  learner_lgb_poisson,
-  learner_lgb_tweedie,
-  learner_lgb_gamma
-)
-
-learner_feat_lgb = list(
-  learner_lgb,
-  learner_lgb_poisson,
-  learner_lgb_tweedie,
-  learner_featureless
-)
-
+# Outer resampling (for model evaluation)
+outer_resampling = rsmp("cv", folds = 3) # This was your cv10, now explicitly 5 folds
 ```
 
 
 
-
 ```{r}
-cv10 = rsmp("cv", folds = 5)
-
+# --- 6. Benchmarking ---
+# Define the design for the benchmark
 design = benchmark_grid(
   tasks = task_mv,
-  learners = learner_feat_lgb,
-  resamplings = cv10
+  learners = learners_for_benchmark,
+  resamplings = outer_resampling
 )
 
 # Run the benchmark
-bmr = benchmark(design)
+# This will take some time due to nested resampling (tuning within each outer fold)
+# Consider logger_list = list(lgr::get_logger("mlr3")) and lgr::threshold("info") or "debug" for more verbose output
+#future::plan("multisession") # Uncomment for parallel execution if your machine has multiple cores
 
-bmr$aggregate(msr("regr.mse"))
+bmr = benchmark(design)
 ```
 
-
-
 ```{r}
-split = partition(task_mv)
-learner_lgb$train(task_mv, row_ids = split$train)
-learner_lgb_poisson$train(task_mv, row_ids = split$train)
-learner_lgb_tweedie$train(task_mv, row_ids = split$train)
-learner_featureless$train(task_mv, row_ids = split$train)
+bmr$aggregate(msrs(c("regr.mse", "regr.mae")))
 
-learner_lgb$predict(task_mv, row_ids = split$test)$score()
-learner_lgb_poisson$predict(task_mv, row_ids = split$test)$score()
-learner_lgb_tweedie$predict(task_mv, row_ids = split$test)$score()
-learner_featureless$predict(task_mv, row_ids = split$test)$score()
 ```
 

@@ -13,19 +13,21 @@ normalize_date_to_days <- function(date_vector) {
 }
 
 mv_changed_data <- mv_data %>%
-  select(-c(N_claims_year,Date_next_renewal, Date_lapse, Lapse, ID)) 
+  select(-c(N_claims_year, Date_next_renewal, Date_lapse, Lapse, ID))
 
 date_cols <- mv_changed_data %>%
   select(where(is.Date)) %>%
   colnames()
 
 mv_changed_data <- mv_changed_data %>%
-    mutate(across(all_of(date_cols), ~ year(.x), .names = "{.col}_year")) %>%
-    mutate(across(all_of(date_cols), ~ month(.x), .names = "{.col}_month")) %>%
-    mutate(across(all_of(date_cols), ~ day(.x), .names = "{.col}_day")) %>%
-  mutate(across(all_of(date_cols), normalize_date_to_days)) 
+  mutate(across(all_of(date_cols), ~ year(.x), .names = "{.col}_year")) %>%
+  mutate(across(all_of(date_cols), ~ month(.x), .names = "{.col}_month")) %>%
+  mutate(across(all_of(date_cols), ~ day(.x), .names = "{.col}_day")) %>%
+  mutate(across(all_of(date_cols), normalize_date_to_days))
 
 ```
+
+
 
 
 ```{r Learner and task}
@@ -42,7 +44,8 @@ search_space = ps(
   num_leaves = p_int(lower = 10, upper = 512),       # Max leaves in a tree
   max_depth = p_int(lower = 3, upper = 15),          # Max tree depth
   feature_fraction = p_dbl(lower = 0.6, upper = 1.0), # Fraction of features per tree (colsample_bytree)
-  bagging_fraction = p_dbl(lower = 0.6, upper = 1.0) # Fraction of data per tree (subsample)
+  bagging_fraction = p_dbl(lower = 0.6, upper = 1.0), # Fraction of data per tree (subsample)
+  min_data_in_leaf = p_int(lower = 1, upper = 100), # Min data in a leaf
 )
 ```
 
