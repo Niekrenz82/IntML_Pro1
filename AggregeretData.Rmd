@@ -17,7 +17,6 @@ df_agg <- mv_data_imp %>%
     Max_products = last(Max_products),
     Payment = last(Payment),
     #N_claims_year = last(N_claims_year),
-    Total_N_claims_year = sum(N_claims_year, na.rm = TRUE),
     N_claims_history = last(N_claims_history),
     R_Claims_history = last(R_Claims_history),
     Type_risk = last(Type_risk),
@@ -33,17 +32,27 @@ df_agg <- mv_data_imp %>%
     Age_driving_licence = last(Age_driving_licence),
     Vehicle_age = last(Vehicle_age),
     # Summerede værdier
+    Total_N_claims_year = sum(N_claims_year, na.rm = TRUE),
     Total_premium = sum(Premium, na.rm = TRUE),
     Total_claims = sum(Cost_claims_year, na.rm = TRUE),
-    Total_exposure = sum(Exposure, na.rm = TRUE),
-    
+    Total_exposure = sum(Exposure, na.rm = TRUE)
   )
 
 ```
 
 ```{r}
+# code to count number of na in each column
+na_count <- sapply(df_agg, function(x) sum(is.na(x)))
+```
+
+
+```{r}
 df_agg <- df_agg %>%
-  mutate(PCC = as.factor(ifelse(Total_claims > 0, "1", "0")))
+  mutate(
+    PCC = as.factor(ifelse(Total_claims > 0, "1", "0")),
+    Freq = Total_N_claims_year / Total_exposure,
+    Avg_claims = Total_claims / Total_N_claims_year
+    )
 ```
 
 

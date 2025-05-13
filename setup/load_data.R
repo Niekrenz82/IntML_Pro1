@@ -76,10 +76,19 @@ mv_data_tmp <- read_delim(
         Date_lapse
       ) - Date_last_renewal
     ) / 365,
-  ) 
+  )
+
+mv_data_tmp <- mv_data_tmp %>% 
+  mutate(
+    Exposure = if_else(
+      Exposure > 1,
+      1,
+      Exposure
+    )
+  )
 
 # Remove rows with negative exposure
 
 mv_data <- mv_data_tmp %>%
-  filter(Exposure >= 0) %>%
+  filter(Exposure > 0) %>%
   select(-Date_birth, -Date_driving_licence, -Year_matriculation)

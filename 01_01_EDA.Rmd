@@ -116,19 +116,26 @@ mv_data_tmp %>%
     Exposure_type = case_when(
       Exposure < 0 ~ "negative",
       Exposure == 0 ~ "zero",
+      0 < Exposure & Exposure < 1 ~ "zero - one",
       Exposure == 1 ~ "one",
-      TRUE ~ "other"
+      Exposure > 1 ~ "greater than one"
     )
   ) %>% 
   group_by(Exposure_type) %>%
   summarise(
-    freq = mean(N_claims_year),
+    freq = sum(N_claims_year)/sum(Exposure),
     avg_claim = mean(Cost_claims_year),
     n = n(),
     mean_exposure = mean(Exposure)
   ) %>% 
   arrange(freq)
 ```
+```{r}
+mv_data_tmp %>% 
+  filter(Exposure > 1)
+```
+
+
 Removing all rows, with negative exposure. Where contract is terminated before renewal date:
 ```{r}
 mv_data %>% 

@@ -137,10 +137,6 @@ design   = benchmark_grid(
 bmr = benchmark(design) # , store_models = TRUE
 saveRDS(bmr, file = "output/bmr01.rds")
 ```
-```{r}
-saveRDS(bmr, file = "output/bmr01.rds")
-```
-
 
 ```{r}
 # 8) Aggregate MSE results
