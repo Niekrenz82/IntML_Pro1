@@ -1,0 +1,123 @@
+---
+title: "Severitymodeledes"
+output: html_document
+date: "2025-05-13"
+---
+```{r}
+mv_changed_data_P <- df_agg_P %>% select(-PCC)
+```
+
+
+```{r}
+task_sev <- TaskRegr$new(
+  id = "Severity",
+  backend = mv_changed_data_P,
+  target = "Avg_claims"
+)
+
+# Sæt vægtkolonne
+task_sev$set_col_roles("Total_exposure", roles = "weight")
+
+```
+
+```{r}
+learner = lrn("regr.ranger")
+resample_result <- resample(task_sev, learner, rsmp("cv", folds = 5))
+resample_result$aggregate(msrs(c("regr.rmse", "regr.mae", "regr.rsq")))
+
+```
+
+```{r}
+
+xgb = lrn("regr.xgboost", nrounds = 100)
+
+# Tuning space
+search_space = ParamSet$new(list(
+  ParamDbl$new("eta", lower = 0.01, upper = 0.3),
+  ParamInt$new("max_depth", lower = 2, upper = 8)
+))
+
+# AutoTuner with random search
+at_xgb = AutoTuner$new(
+  learner = xgb,
+  resampling = rsmp("cv", folds = 3),
+  measure = msr("regr.rmse"),
+  search_space = search_space,
+  terminator = trm("evals", n_evals = 20),
+  tuner = tnr("random_search")
+)
+
+# 2. Build stacked learner
+# Dummy encoding
+encode = po("encode")
+
+# Base learners with CV stacking
+base_lm    = po("learner_cv", lrn("regr.lm"), id = "lm_cv")
+base_rf    = po("learner_cv", lrn("regr.ranger"), id = "rf_cv")
+base_xgb   = po("learner_cv", at_xgb, id = "xgb_cv")
+base_feat  = po("learner_cv", lrn("regr.featureless"), id = "feat_cv")
+
+# Stack and meta-learner
+stack = gunion(list(base_lm, base_rf, base_xgb, base_feat)) %>>% po("featureunion")
+meta  = po("learner", lrn("regr.lm"))
+
+# Combine into graph and wrap as learner
+graph = encode %>>% stack %>>% meta
+learner_stack = GraphLearner$new(graph)
+
+# 3. Resampling with 5-fold CV
+resample_result <- resample(task_sev, learner_stack, rsmp("cv", folds = 5))
+
+# 4. Metrics
+resample_result$aggregate(msrs(c("regr.rmse", "regr.mae", "regr.rsq")))
+```
+
+
+```{r}
+learner = po("encode") %>>% lrn("regr.featureless", predict_type = "response")
+
+# 2. Resampling med 5-fold CV
+resample_result <- resample(task_sev, learner, rsmp("cv", folds = 5))
+
+# 3. Performance metrics
+resample_result$aggregate(msrs(c("regr.rmse", "regr.mae", "regr.rsq")))
+
+```
+
+
+
+```{r}
+
+learner = po("encode") %>>% lrn("regr.lm", predict_type = "response")
+
+# 2. Resampling med 5-fold CV
+resample_result <- resample(task_sev, learner, rsmp("cv", folds = 5))
+
+# 3. Performance metrics
+resample_result$aggregate(msrs(c("regr.rmse", "regr.mae", "regr.rsq")))
+```
+
+```{r}
+encode = po("encode")
+
+# Base learners med CV-stacking
+base_lm   = po("learner_cv", lrn("regr.lm"), id = "lm_cv")
+base_rf   = po("learner_cv", lrn("regr.ranger"), id = "rf_cv")
+base_xgb  = po("learner_cv", lrn("regr.xgboost"), id = "xgb_cv")
+
+# Saml outputs fra base learners
+stack = gunion(list(base_lm, base_rf, base_xgb)) %>>% po("featureunion")
+
+# Meta learner (f.eks. linear regression på preds)
+metalearner = lrn("regr.lm")
+
+# Hele pipeline
+graph = encode %>>% stack %>>% po("learner", metalearner)
+
+# Wrap i GraphLearner
+learner_stack = GraphLearner$new(graph)
+
+resample_result = resample(task_sev, learner_stack, rsmp("cv", folds = 5))
+resample_result$aggregate(msrs(c("regr.rmse", "regr.rsq", "regr.mae")))
+```
+
