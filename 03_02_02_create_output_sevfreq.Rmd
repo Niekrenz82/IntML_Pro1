@@ -29,7 +29,7 @@ bmr_freq01_table = tibble(
   mse = agg_bmr_freq01$regr.mse
 )
 print(
-  xtable(bmr_freq01_table),
+  xtable(bmr_freq01_table %>% arrange(mse)),
   include.rownames = FALSE
 )
 ```

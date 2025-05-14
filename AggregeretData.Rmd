@@ -51,7 +51,8 @@ df_agg_tmp <- df_agg %>%
   mutate(
     PCC = as.factor(ifelse(Total_claims > 0, "1", "0")),
     Freq = Total_N_claims_year / Total_exposure,
-    Avg_claims = Total_claims / Total_N_claims_year
+    Avg_claims = Total_claims / Total_N_claims_year,
+    claims_exposure = Total_claims / Total_exposure
     )
 ```
 
