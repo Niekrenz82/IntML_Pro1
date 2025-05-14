@@ -1,0 +1,34 @@
+---
+title: "create_output_sevfreq"
+output: html_document
+---
+
+Load benchmarks
+```{r}
+bmr_freq01 = readRDS("output/bmr_freq01.rds")
+bmr_sev01 = readRDS("output/bmr_sev01.rds")
+bmr_pcc01 = readRDS("output/bmr_pcc01.rds")
+```
+
+```{r}
+bmr_freq01_plot <- autoplot(bmr_freq01)
+bmr_sev01_plot <- autoplot(bmr_sev01)
+bmr_pcc01_plot <- autoplot(bmr_pcc01)
+```
+
+```{r}
+ggsave(bmr_freq01_plot, file = "output/grafics/bmr_freq01_plot.pdf")
+ggsave(bmr_sev01_plot, file = "output/grafics/bmr_sev01_plot.pdf")
+ggsave(bmr_pcc01_plot, file = "output/grafics/bmr_pcc01_plot.pdf")
+```
+
+```{r}
+print(
+  xtable(as.data.frame(bmr_freq01$aggregate(measure_mse))),
+  include.rownames = FALSE
+)
+```
+
+
+
+
