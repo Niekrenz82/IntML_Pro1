@@ -13,7 +13,7 @@ bmr_pcc01 = readRDS("output/bmr_pcc01.rds")
 ```{r}
 bmr_freq01_plot <- autoplot(bmr_freq01)
 bmr_sev01_plot <- autoplot(bmr_sev01)
-bmr_pcc01_plot <- autoplot(bmr_pcc01)
+bmr_pcc01_plot <- autoplot(object = bmr_pcc01, measure = measure_acc)
 ```
 
 ```{r}
@@ -23,12 +23,38 @@ ggsave(bmr_pcc01_plot, file = "output/grafics/bmr_pcc01_plot.pdf")
 ```
 
 ```{r}
+agg_bmr_freq01 = bmr_freq01$aggregate(measure_mse)
+bmr_freq01_table = tibble(
+  learner = agg_bmr_freq01$learner_id,
+  mse = agg_bmr_freq01$regr.mse
+)
 print(
-  xtable(as.data.frame(bmr_freq01$aggregate(measure_mse))),
+  xtable(bmr_freq01_table),
   include.rownames = FALSE
 )
 ```
-
+```{r}
+agg_bmr_sev01 = bmr_sev01$aggregate(measure_mse)
+bmr_sev01_table = tibble(
+  learner = agg_bmr_sev01$learner_id,
+  mse = agg_bmr_sev01$regr.mse
+)
+print(
+  xtable(bmr_sev01_table),
+  include.rownames = FALSE
+)
+```
+```{r}
+agg_bmr_pcc01 = bmr_pcc01$aggregate(measure_acc)
+bmr_pcc01_table = tibble(
+  learner = agg_bmr_pcc01$learner_id,
+  mse = agg_bmr_pcc01$classif.acc
+)
+print(
+  xtable(bmr_pcc01_table),
+  include.rownames = FALSE
+)
+```
 
 
 

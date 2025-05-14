@@ -47,7 +47,7 @@ df_agg <- mv_data_imp %>%
 ```
 
 ```{r}
-df_agg <- df_agg %>%
+df_agg_tmp <- df_agg %>%
   mutate(
     PCC = as.factor(ifelse(Total_claims > 0, "1", "0")),
     Freq = Total_N_claims_year / Total_exposure,
@@ -56,8 +56,8 @@ df_agg <- df_agg %>%
 ```
 
 ```{r}
-mv_changed_data <- df_agg %>%
-  select(-c(ID,Total_N_claims_year, Total_premium, Total_claims, R_Claims_history))
+mv_changed_data <- df_agg_tmp %>%
+  select(-c(Total_N_claims_year, Total_premium, Total_claims, R_Claims_history))
 
 date_cols <- mv_changed_data %>%
   select(where(is.Date)) %>%

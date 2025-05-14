@@ -4,22 +4,51 @@ output: html_document
 ---
 
 ```{r}
-mv_data_freq <- df_agg_P %>% select(-c(PCC, Avg_claims))
-task_freq <- TaskRegr$new(id = "freq", backend = mv_data_freq, target = "Freq")
-task_freq$set_col_roles("Total_exposure", roles = "weight")
+splits = readRDS("output/true_split.rds")
+```
+
+
+```{r}
+task_freq_train <- df_agg %>% 
+  filter(PCC == "1" & ID %in% splits$train_ids) %>% 
+  select(-c(PCC, Avg_claims, ID)) %>% 
+  TaskRegr$new(id = "freq_train", backend = ., target = "Freq")
+
+task_freq_train$set_col_roles("Total_exposure", roles = "weight")
+
+task_freq_test <- df_agg %>%
+  filter(ID %in% splits$test_ids) %>%
+  select(-c(PCC, Avg_claims, ID)) %>%
+  TaskRegr$new(id = "freq_test", backend = ., target = "Freq")
+
+task_freq_test$set_col_roles("Total_exposure", roles = "weight")
 ```
 
 ```{r}
 mv_data_sev <- df_agg_P %>% select(-c(PCC, Freq))
 
-task_sev <- TaskRegr$new(
-  id = "Severity",
-  backend = mv_data_sev,
+task_sev_train <- mv_data_sev %>% 
+  filter(ID %in% splits$train_ids) %>% 
+  select(-ID) %>% 
+  TaskRegr$new(
+  id = "Severity_train",
+  backend = .,
+  target = "Avg_claims"
+)
+
+task_sev_train$set_col_roles("Total_exposure", roles = "weight")
+
+task_sev_test <- mv_data_sev %>% 
+  filter(ID %in% splits$test_ids) %>% 
+  select(-ID) %>% 
+  TaskRegr$new(
+  id = "Severity_test",
+  backend = .,
   target = "Avg_claims"
 )
 
 # Sæt vægtkolonne
-task_sev$set_col_roles("Total_exposure", roles = "weight")
+task_sev_test$set_col_roles("Total_exposure", roles = "weight")
 ```
 
 ```{r}
@@ -32,15 +61,21 @@ task_pcc$set_col_roles(cols = "Total_exposure", roles = "weight")
 ```
 
 ```{r}
-set.seed(1234)
-split = partition(task_pcc, ratio = 0.8)
-true_split = list(
-  test_nr = split$test,
-  train_nr = split$train,
-  test_ids = as.numeric(mv_data_pcc$ID[split$test]),
-  train_ids = as.numeric(mv_data_pcc$ID[split$train])
+# set.seed(1234)
+# split = partition(task_pcc, ratio = 0.8)
+# 
+# true_split = list(
+#   test_nr = split$test,
+#   train_nr = split$train,
+#   test_ids = as.numeric(positive_id_df$ID[split$test]),
+#   train_ids = as.numeric(positive_id_df$ID[split$train])
+# 
+# )
+# saveRDS(true_split, file = "output/true_split.rds")
+```
 
-)
-saveRDS(true_split, file = "output/true_split.rds")
+
+```{r}
+measure_acc = msr("classif.acc")
 ```
 
