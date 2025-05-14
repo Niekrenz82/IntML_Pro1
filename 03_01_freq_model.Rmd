@@ -11,8 +11,21 @@ knitr::knit(
 ```
 
 ```{r}
-task_freq <- TaskRegr$new(id = "freq", backend = df_agg_P, target = "Freq")
+mv_data_freq <- df_agg_P %>% select(-c(PCC, Avg_claims))
+task_freq <- TaskRegr$new(id = "freq", backend = mv_data_freq, target = "Freq")
 task_freq$set_col_roles("Total_exposure", roles = "weight")
+```
+
+```{r}
+mv_data_sev <- df_agg_P %>% select(-c(PCC, Freq))
+
+task_sev <- TaskRegr$new(
+  id = "Severity",
+  backend = mv_data_sev,
+  target = "Avg_claims"
+)
+# Sæt vægtkolonne
+task_sev$set_col_roles("Total_exposure", roles = "weight")
 ```
 
 ```{r}
@@ -20,14 +33,38 @@ task_freq$set_col_roles("Total_exposure", roles = "weight")
 resampling_outer = rsmp("cv", folds = 2)
 # 7) Benchmark setup & run
 learners = list(at_lgbm, gl_lasso, at_xgb, at_ranger, gl_featless, gl_ridge) # gl_lasso, at_xgb, at_ranger, gl_featless, gl_ridge, at_lgbm
+```
+
+```{r}
 design_freq   = benchmark_grid(
   tasks      = task_freq,
   learners   = learners,
   resamplings = resampling_outer
 )
-bmr = benchmark(design) 
-bmr$aggregate(measure_mse)
+bmr_freq = benchmark(design_freq) 
+saveRDS(bmr_freq, file = "output/bmr_freq01.rds")
 ```
+
+```{r}
+design_sev   = benchmark_grid(
+  tasks      = task_sev,
+  learners   = learners,
+  resamplings = resampling_outer
+)
+bmr_sev = benchmark(design_sev) 
+saveRDS(bmr_sev, file = "output/bmr_sev01.rds")
+```
+
+```{r}
+bmr_freq = readRDS("output/bmr_freq01.rds")
+bmr_freq$aggregate(measure_mse)
+```
+
+```{r}
+bmr_sev = readRDS("output/bmr_sev01.rds")
+bmr_sev$aggregate(measure_mse)
+```
+
 
 ```{r}
 split = partition(task_freq, ratio = 0.8)

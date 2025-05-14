@@ -54,6 +54,7 @@ mv_data_tmp %>%
   filter(Cost_claims_year > 0) %>% 
   select(ID, Date_last_renewal, Date_lapse, Cost_claims_year, N_claims_year)
 ```
+
 ```{r}
 mv_data_tmp %>% 
   filter(Date_next_renewal == Date_lapse) %>% 

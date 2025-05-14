@@ -1,0 +1,36 @@
+---
+title: "03_02_final_sev_freq"
+output: html_document
+---
+
+```{r}
+mv_data_freq <- df_agg_P %>% select(-c(PCC, Avg_claims))
+task_freq <- TaskRegr$new(id = "freq", backend = mv_data_freq, target = "Freq")
+task_freq$set_col_roles("Total_exposure", roles = "weight")
+```
+
+```{r}
+mv_data_sev <- df_agg_P %>% select(-c(PCC, Freq))
+
+task_sev <- TaskRegr$new(
+  id = "Severity",
+  backend = mv_data_sev,
+  target = "Avg_claims"
+)
+# Sæt vægtkolonne
+task_sev$set_col_roles("Total_exposure", roles = "weight")
+```
+
+```{r}
+set.seed(1234)
+split = partition(task_freq, ratio = 0.8)
+true_split = list(
+  test_nr = split$test,
+  train_nr = split$train,
+  test_ids = as.numeric(df_agg$ID[split$test]),
+  train_ids = as.numeric(df_agg$ID[split$train])
+  
+)
+saveRDS(true_split, file = "output/true_split.rds")
+```
+
