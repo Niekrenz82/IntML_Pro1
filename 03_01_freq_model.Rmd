@@ -1,0 +1,51 @@
+---
+title: "R Notebook"
+output: html_document
+---
+```{r}
+knitr::knit(
+  text  = readLines("AggregeretData.Rmd"),
+  quiet = TRUE,
+  envir = globalenv()
+)
+```
+
+```{r}
+task_freq <- TaskRegr$new(id = "freq", backend = df_agg_P, target = "Freq")
+task_freq$set_col_roles("Total_exposure", roles = "weight")
+```
+
+```{r}
+# 6) Outer resampling & task
+resampling_outer = rsmp("cv", folds = 2)
+# 7) Benchmark setup & run
+learners = list(at_lgbm, gl_lasso, at_xgb, at_ranger, gl_featless, gl_ridge) # gl_lasso, at_xgb, at_ranger, gl_featless, gl_ridge, at_lgbm
+design_freq   = benchmark_grid(
+  tasks      = task_freq,
+  learners   = learners,
+  resamplings = resampling_outer
+)
+bmr = benchmark(design) 
+bmr$aggregate(measure_mse)
+```
+
+```{r}
+split = partition(task_freq, ratio = 0.8)
+```
+
+```{r}
+gl_featless$train(task_freq, row_ids = split$train)
+```
+
+```{r}
+gl_featless$predict(task_freq, row_ids = split$test)$score(measure_mse)
+```
+```{r}
+at_lgbm$train(task_freq, row_ids = split$train)
+```
+
+```{r}
+at_lgbm$predict(task_freq, row_ids = split$test)$score(measure_mse)
+```
+
+

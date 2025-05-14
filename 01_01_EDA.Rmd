@@ -36,7 +36,7 @@ ID_claim_sus %>% filter(is_decreasing == FALSE)
 ```
 
 ```{r}
-mv_data %>% filter(ID == 16257) %>% select(N_claims_year, N_claims_history)
+mv_data %>% filter(ID == 39) %>% select(ID, Date_last_renewal, Date_next_renewal,Cost_claims_year, N_claims_year, N_claims_history) %>% xtable()
 ```
 
 All examples of sum(N_claims_year) > N_claims_history
@@ -49,13 +49,13 @@ mv_data %>%
 
 What does it mean that a contract is terminated on the same day it is renewed, and that Cost_claims_year > 0
 ```{r}
-mv_data %>% 
+mv_data_tmp %>% 
   filter(Date_last_renewal == Date_lapse) %>% 
   filter(Cost_claims_year > 0) %>% 
   select(ID, Date_last_renewal, Date_lapse, Cost_claims_year, N_claims_year)
 ```
 ```{r}
-mv_data %>% 
+mv_data_tmp %>% 
   filter(Date_next_renewal == Date_lapse) %>% 
   select(Date_next_renewal, Date_lapse, Cost_claims_year, N_claims_year)
 ```
@@ -114,22 +114,27 @@ Check if the exposure variable is valid?:
 mv_data_tmp %>% 
   mutate(
     Exposure_type = case_when(
-      Exposure < 0 ~ "negative",
-      Exposure == 0 ~ "zero",
-      0 < Exposure & Exposure < 1 ~ "zero - one",
-      Exposure == 1 ~ "one",
-      Exposure > 1 ~ "greater than one"
+      Exposure < 0 ~ "<0",
+      Exposure == 0 ~ "0",
+      0 < Exposure & Exposure < 1 ~ "(0,1)",
+      Exposure == 1 ~ "1",
+      Exposure > 1 ~ ">1"
     )
   ) %>% 
   group_by(Exposure_type) %>%
   summarise(
-    freq = sum(N_claims_year)/sum(Exposure),
-    avg_claim = mean(Cost_claims_year),
+    # freq = sum(N_claims_year)/sum(Exposure),
     n = n(),
-    mean_exposure = mean(Exposure)
-  ) %>% 
-  arrange(freq)
+    total_claim = sum(Cost_claims_year),
+    total_claim_N = sum(N_claims_year),
+  ) %>% arrange(total_claim) 
 ```
+```{r}
+mv_data_tmp %>% 
+  filter(Date_last_renewal == Date_lapse)
+```
+
+
 ```{r}
 mv_data_tmp %>% 
   filter(Exposure > 1)

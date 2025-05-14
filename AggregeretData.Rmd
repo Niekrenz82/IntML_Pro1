@@ -2,6 +2,13 @@
 title: "AggregeretData"
 output: html_document
 ---
+```{r}
+knitr::knit(
+  text  = readLines("01_01_EDA.Rmd"),
+  quiet = TRUE,
+  envir = globalenv()
+)
+```
 
 ```{r}
 df_agg <- mv_data_imp %>%
@@ -37,14 +44,7 @@ df_agg <- mv_data_imp %>%
     Total_claims = sum(Cost_claims_year, na.rm = TRUE),
     Total_exposure = sum(Exposure, na.rm = TRUE)
   )
-
 ```
-
-```{r}
-# code to count number of na in each column
-na_count <- sapply(df_agg, function(x) sum(is.na(x)))
-```
-
 
 ```{r}
 df_agg <- df_agg %>%
@@ -55,7 +55,22 @@ df_agg <- df_agg %>%
     )
 ```
 
+```{r}
+mv_changed_data <- df_agg %>%
+  select(-c(ID,Total_N_claims_year, Total_premium, Total_claims, R_Claims_history))
 
+date_cols <- mv_changed_data %>%
+  select(where(is.Date)) %>%
+  colnames()
+
+mv_changed_data <- mv_changed_data %>%
+    mutate(across(all_of(date_cols), ~ year(.x), .names = "{.col}_year")) %>%
+    mutate(across(all_of(date_cols), ~ month(.x), .names = "{.col}_month")) %>%
+    mutate(across(all_of(date_cols), ~ day(.x), .names = "{.col}_day"))
+
+df_agg <- mv_changed_data %>%
+  select(-c(Date_start_contract, Date_last_renewal, N_claims_history))
+```
 
 ```{r}
 df_agg_P <- df_agg %>%
