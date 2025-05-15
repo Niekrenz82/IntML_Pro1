@@ -30,9 +30,19 @@ mv_changed_data <- mv_changed_data %>%
 
 
 
-```{r Task and learners}
-task_mv = TaskRegr$new(id = "motor_vehicle_claims", backend = mv_changed_data, target = "Cost_claims_year")
 
+
+```{r Task and learners}
+set.seed(1234)
+task_mv = TaskRegr$new(id = "motor_vehicle_claims", backend = mv_changed_data, target = "Cost_claims_year")
+splits <- partition(task_mv, ratio = 0.8)
+```
+
+
+
+
+
+```{r Task and learners}
 # --- 3. Learner Definitions ---
 
 # Featureless learner (baseline)
@@ -41,11 +51,15 @@ learner_featureless = lrn("regr.featureless")
 # Base LightGBM learners (objective and iterations are set, other params will be tuned)
 # Note: `num_iterations` is fixed here. If you want to tune it, add it to the `search_space`.
 # The default objective for regr.lightgbm is "regression_l2" (L2 loss)
-learner_lgb_base = lrn("regr.lightgbm", id = "lgb_l2", num_iterations = 500)
+learner_lgb_base = lrn("regr.lightgbm", id = "lgb_l2", num_iterations = 1000)
+learner_lgb_poisson_base = lrn("regr.lightgbm", id = "lgb_poisson", objective = "poisson", num_iterations = 1000)
+learner_lgb_tweedie_base = lrn("regr.lightgbm", id = "lgb_tweedie", objective = "tweedie", num_iterations = 1000)
 
-learner_lgb_poisson_base = lrn("regr.lightgbm", id = "lgb_poisson", objective = "poisson", num_iterations = 500)
-learner_lgb_tweedie_base = lrn("regr.lightgbm", id = "lgb_tweedie", objective = "tweedie", num_iterations = 500)
-learner_lgb_gamma_base = lrn("regr.lightgbm", id = "lgb_gamma", objective = "gamma", num_iterations = 500)
+learner_lgb_tweedie_met = lrn("regr.lightgbm", id = "lgb_tweedie_met", objective = "regression", num_iterations = 1000, eval = "tweedie")
+learner_lgb_met_tweedie = lrn("regr.lightgbm", id = "lgb_met_tweedie", objective = "tweedie", num_iterations = 1000, eval = "regression")
+learner_lgb_quantile_base = lrn("regr.lightgbm", id = "lgb_quantile", objective = "quantile", num_iterations = 1000)
+
+learner_lgb_gamma_base = lrn("regr.lightgbm", id = "lgb_gamma", objective = "gamma", num_iterations = 1000)
 
 
 # --- 4. Hyperparameter Search Space for LightGBM ---
@@ -68,7 +82,7 @@ inner_resampling = rsmp("cv", folds = 3)
 
 # Terminator (for hyperparameter tuning)
 # Increase n_evals for more thorough tuning in a real scenario
-terminator = trm("evals", n_evals = 10) # Using 10 evals for speed; consider 20-50+
+terminator = trm("evals", n_evals = 30) # Using 10 evals for speed; consider 20-50+
 
 # Tuner (Random Search)
 tuner = tnr("random_search")
@@ -103,19 +117,52 @@ at_lgb_tweedie = AutoTuner$new(
   tuner = tuner
 )
 
+# learner_lgb_tweedie_met, learner_lgb_met_tweedie, learner_lgb_quantile_base
+at_lgb_tweedie_met = AutoTuner$new(
+  learner = learner_lgb_tweedie_met,
+  resampling = inner_resampling,
+  measure = msr("regr.mse"),
+  search_space = search_space_lgb,
+  terminator = terminator,
+  tuner = tuner
+)
+at_lgb_met_tweedie = AutoTuner$new(
+  learner = learner_lgb_met_tweedie,
+  resampling = inner_resampling,
+  measure = msr("regr.mse"),
+  search_space = search_space_lgb,
+  terminator = terminator,
+  tuner = tuner
+)
+at_lgb_quantile = AutoTuner$new(
+  learner = learner_lgb_quantile_base,
+  resampling = inner_resampling,
+  measure = msr("regr.mse"),
+  search_space = search_space_lgb,
+  terminator = terminator,
+  tuner = tuner
+)
+
+
 
 # List of learners for the outer loop benchmark
+# learners_for_benchmark = list(
+#   at_lgb_l2,
+#   at_lgb_poisson,
+#   at_lgb_tweedie,
+#   learner_featureless # Baseline
+# )
+
 learners_for_benchmark = list(
-  at_lgb_l2,
-  at_lgb_poisson,
-  at_lgb_tweedie,
+  at_lgb_tweedie_met,
+  at_lgb_met_tweedie,
+  at_lgb_quantile,
   learner_featureless # Baseline
 )
 
 # Outer resampling (for model evaluation)
 outer_resampling = rsmp("cv", folds = 3) # This was your cv10, now explicitly 5 folds
 ```
-
 
 
 ```{r}
@@ -137,6 +184,20 @@ bmr = benchmark(design)
 
 ```{r}
 bmr$aggregate(msrs(c("regr.mse", "regr.mae")))
+$param_set$values
+
+```
+
+```{r}
+# --- 7. Finding parameters for best model
+# Split data as well
+
+splits <- partition(task_mv, ratio = 0.6)
+
+at_lgb_tweedie$train(
+  task = task_mv,
+  row_ids = splits$train
+)
 
 ```
 

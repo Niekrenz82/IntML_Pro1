@@ -13,6 +13,24 @@ source("setup/run_setup.R")
 summary(mv_data)
 ```
 
+```{r}
+
+quantile(mv_data$Cost_claims_year, probs = seq(0, 1, 0.05))
+
+
+
+mv_data %>%
+  summarise("mse_mean" = mean((Cost_claims_year-178.4418)^2),
+            "mse_0" = mean((Cost_claims_year-0)^2),
+            "mae_mean" = mean(abs(Cost_claims_year-178.4418)),
+            "mae_0" = mean(abs(Cost_claims_year-0)))
+
+mv_data %>%
+  filter(Cost_claims_year > 800) %>%
+  summarise(sum(Cost_claims_year))
+```
+
+
 What does it mean that "N_claims_year" does not sum to "N_claim_history":
 ```{r}
 mv_data %>% filter(ID == 39)
@@ -54,7 +72,6 @@ mv_data_tmp %>%
   filter(Cost_claims_year > 0) %>% 
   select(ID, Date_last_renewal, Date_lapse, Cost_claims_year, N_claims_year)
 ```
-
 ```{r}
 mv_data_tmp %>% 
   filter(Date_next_renewal == Date_lapse) %>% 

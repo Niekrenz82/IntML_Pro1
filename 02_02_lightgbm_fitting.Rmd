@@ -6,6 +6,8 @@ output: html_document
 
 
 ```{r EDA}
+true_split <- readRDS("C:/Code/IntML_Pro1/output/true_split.rds")
+
 reference_date <- as.Date("2015-01-01")
 
 normalize_date_to_days <- function(date_vector) {
@@ -13,7 +15,7 @@ normalize_date_to_days <- function(date_vector) {
 }
 
 mv_changed_data <- mv_data %>%
-  select(-c(N_claims_year, Date_next_renewal, Date_lapse, Lapse, ID))
+  select(-c(N_claims_year, Date_next_renewal, Date_lapse, Lapse))
 
 date_cols <- mv_changed_data %>%
   select(where(is.Date)) %>%
@@ -25,14 +27,77 @@ mv_changed_data <- mv_changed_data %>%
   mutate(across(all_of(date_cols), ~ day(.x), .names = "{.col}_day")) %>%
   mutate(across(all_of(date_cols), normalize_date_to_days))
 
+mv_changed_data[] <- lapply(mv_changed_data, function(x) {
+  if (is.factor(x) && anyNA(x)) {
+    fct_explicit_na(x, na_level = "NA")
+  } else {
+    x
+  }
+})
+
+# count of Unique ID in mv_changed_data
+mv_changed_data %>%
+  summarise(count = n_distinct(ID),
+            split_count = length(unique(c(true_split$train_ids, true_split$test_ids))))
+```
+
+
+
+
+```{r Make train and test data}
+mv_train_data <- mv_changed_data %>%
+  filter(ID %in% true_split$train_ids) %>%
+  select(-c(ID)) %>%
+  as.data.table()
+
+mv_test_data <- mv_changed_data %>%
+  filter(ID %in% true_split$test_ids) %>%
+  select(-c(ID)) %>%
+  as.data.table()
+
+nrow(mv_train_data) + nrow(mv_test_data)
+```
+
+
+
+
+```{r}
+factors_list <- mv_changed_data %>% select(where(is.factor)) %>% colnames()
+
+
+mv_train_data_big <- copy(mv_train_data)
+mv_test_data_big <- copy(mv_test_data)
+for (i in factors_list) {
+  for (j in setdiff(factors_list, i)) {
+    print(paste("Comparing", i, "and", j))
+    temp <- mv_train_data_big %>%
+      group_by(!!sym(i), !!sym(j)) %>%
+      summarise(mean = mean(Cost_claims_year),
+                sd = sd(Cost_claims_year),
+                min = min(Cost_claims_year),
+                q_95 = quantile(Cost_claims_year, 0.95),
+                IQR = IQR(Cost_claims_year),
+                max = max(Cost_claims_year)) 
+    mv_train_data_big <- left_join(mv_train_data_big, temp, by = c(i, j))
+    mv_test_data_big <- left_join(mv_test_data_big, temp, by = c(i, j))
+  }
+}
+
 ```
 
 
 
 
 ```{r Learner and task}
-learner_lgb = mlr3extralearners::lrn("regr.lightgbm")
-task_mv = TaskRegr$new(id = "motor_vehicle_claims", backend = mv_changed_data, target = "Cost_claims_year")
+learner_lgb_tweedie = lrn("regr.lightgbm", id = "lgb_tweedie", objective = "tweedie", num_iterations = 1000)
+learner_featureless = lrn("regr.featureless")
+
+
+train_task_mv = TaskRegr$new(id = "motor_vehicle_claims_train", backend = mv_train_data, target = "Cost_claims_year")
+predict_task_mv = TaskRegr$new(id = "motor_vehicle_claims_test", backend = mv_test_data, target = "Cost_claims_year")
+
+train_task_mv_big = TaskRegr$new(id = "motor_vehicle_claims_train", backend = mv_train_data_big, target = "Cost_claims_year")
+predict_task_mv_big = TaskRegr$new(id = "motor_vehicle_claims_test", backend = mv_test_data_big, target = "Cost_claims_year")
 ```
 
 
@@ -43,55 +108,74 @@ search_space = ps(
   learning_rate = p_dbl(lower = 0.005, upper = 0.1, log = TRUE), # Step size shrinkage
   num_leaves = p_int(lower = 10, upper = 512),       # Max leaves in a tree
   max_depth = p_int(lower = 3, upper = 15),          # Max tree depth
-  feature_fraction = p_dbl(lower = 0.6, upper = 1.0), # Fraction of features per tree (colsample_bytree)
-  bagging_fraction = p_dbl(lower = 0.6, upper = 1.0), # Fraction of data per tree (subsample)
-  min_data_in_leaf = p_int(lower = 1, upper = 100), # Min data in a leaf
+  feature_fraction = p_dbl(lower = 0.2, upper = 1.0), # Fraction of features per tree (colsample_bytree)
+  bagging_fraction = p_dbl(lower = 0.2, upper = 1.0), # Fraction of data per tree (subsample)
+  min_data_in_leaf = p_int(lower = 1, upper = 100) # Min data in a leaf
 )
+
 ```
 
 
 
 ```{r}
-resampling_cv_tuning = rsmp("cv", folds = 3)
-measure_optimize = msr("regr.mse")
-tuner_random = tnr("random_search")
-terminator = trm("evals", n_evals = 500)
 
 at = auto_tuner(
-  learner = learner_lgb,
-  resampling = resampling_cv_tuning, # Inner resampling for tuning
-  measure = measure_optimize,       # Measure to optimize (RMSE on inner CV folds)
+  learner = learner_lgb_tweedie,
+  resampling = rsmp("cv", folds = 3), # Inner resampling for tuning
+  measure = msr("regr.mse"),       # Measure to optimize (RMSE on inner CV folds)
   search_space = search_space,      # Parameter search space (incl. nrounds as regular param)
-  tuner = tuner_random,             # Tuning algorithm
-  terminator = terminator           # Stopping condition for the external tuning
+  tuner = tnr("random_search"),             # Tuning algorithm
+  terminator = trm("evals", n_evals = 10)           # Stopping condition for the external tuning
+)
+at_big = auto_tuner(
+  learner = learner_lgb_tweedie,
+  resampling = rsmp("cv", folds = 3), # Inner resampling for tuning
+  measure = msr("regr.mse"),       # Measure to optimize (RMSE on inner CV folds)
+  search_space = search_space,      # Parameter search space (incl. nrounds as regular param)
+  tuner = tnr("random_search"),             # Tuning algorithm
+  terminator = trm("evals", n_evals = 10)           # Stopping condition for the external tuning
 )
 ```
 
-
 ```{r}
-split = partition(task_mv)
-
-message("Starting hyperparameter tuning...")
-at$train(task_mv, row_ids = split$train)
-message("Tuning complete.")
+# --- 6. Train the Model with Tuning ---
+at$train(train_task_mv)
+at_big$train(train_task_mv_big)
 
 
-
+at_lgb_met_tweedie$train(train_task_mv)
 ```
 
 
+
 ```{r}
-at$predict(task_mv, row_ids = split$test)$score()
-learner_featureless$train(task_mv, row_ids = split$train)
-learner_featureless$predict(task_mv, row_ids = split$test)$score()
+learner_featureless$train(train_task_mv)
+print("Featureless")
+learner_featureless$predict(predict_task_mv)$score()
+# print("LightGBM")
+# at$predict(predict_task_mv)$score()
+print("Big LightGBM")
+at_lgb_met_tweedie$predict(predict_task_mv)$score()
+```
 
-print("Tuning Results:")
-print(at$tuning_result)
+```{r}
+# Get the best parameters from at_lgb_met_tweedie
+at_lgb_met_tweedie$learner$param_set$values
+```
 
-# Get the best hyperparameters found (these will include the best sampled nrounds)
-best_params = at$model$learner$param_set$values
-print("Best Hyperparameters found:")
-print(best_params)
+
+
+```{r}
+at_big$predict(predict_task_mv_big) %>%
+  as.data.table()
+
+
+at$predict(predict_task_mv) %>%
+  as.data.table() %>%
+  arrange(desc(truth)) %>%
+  mutate(response = round(response, 2),
+         diff = truth - response)
+
 ```
 
 
