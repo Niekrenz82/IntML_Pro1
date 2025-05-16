@@ -1,12 +1,12 @@
 
-# Define your encoding pipe
+# Setup preprocessing
 pipe_encode = po("encode",
                  method         = "treatment",
                  affect_columns = selector_type("factor")
 )
 
-# Helper to wrap any learner in your pipe
-make_graph_learner = function(learner) {
+# Use the same pipe for all learners
+make_graph_learner = function(learner){
   gl = pipe_encode %>>% learner
   GraphLearner$new(gl)
 }
